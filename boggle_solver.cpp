@@ -2,6 +2,7 @@
 #include <fstream>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 #include <string>
 #include <map>
 #include <vector>
@@ -10,127 +11,152 @@
 
 using namespace std;
 
-const int boarder = 1; //create a border of null CUBES so we know when we reach an edge
-const int COLS = 4 + (boarder*2);
-const int BOARD_SIZE = COLS * COLS;
-const int NUM_NEIGHBORS = 8;
+const int num_neighbors = 8;
 const int MAX_INPUT = 50; //longest word in dictionary
 
-// neighbors layout
-// 012
-// 3*4
-// 567
-const int NEIGHBORS[NUM_NEIGHBORS] = {-1-COLS,-COLS,1-COLS,-1,1,COLS-1,COLS,COLS+1};
+int duplicates = 0;
 
 
-char board[BOARD_SIZE];
 map <string,bool> dict;
-map <string,bool> prefixes;
+map <string,int> prefixes;
 map <string,bool> words; //found words
+map <string,bool> patterns;
 
-//based on http://boardgamegeek.com/thread/300883/letter-distribution
-const int NUM_GROUPS = 11;
-const string LETTER_GROUPS[NUM_GROUPS] = {"e","t","ar","ino","s","d","chl","fmpu","gy","w","bjkqvxz"};
-const int LETTER_GROUP_FREQ[NUM_GROUPS] = {19,13,12,11,9,6,5,4,3,2,1};
 
-void init(){
-    string group;
-    char letter;
-    int neighborIndex;
 
-    srand( time(NULL) );
-
-    //setup random board
-    for(int i = 0; i < BOARD_SIZE; i++){
-        if( (i < COLS) ||           //top
-        ((i+1) % COLS == 0) ||      //right
-        (i > COLS * (COLS -1)) ||   //bot
-        (i % COLS == 0) ){             //left
-            board[i] = '*';
-        }else{
-            group = LETTER_GROUPS[rand() % NUM_GROUPS];
-            letter = group[rand() % group.length()];
-            board[i] = letter;
-        }
-    }
-
+string readBoggle( string boggleFile ){
+    ifstream file;
+    string str;
+    file.open( boggleFile.c_str() );
+    getline( file, str );
+    return str;
 }   
 
-void printboard(){
-    for(int i = 0; i < BOARD_SIZE; i++){
+void printboard(int board_size, string board, int cols){
+    for(int i = 0; i < board_size; i++){
         char c = board[i];
         if( c == 'Q' ){ 
             cout << c << 'u';
         }else{
             cout << c << ' ';
         }
-        if( (i+1) % COLS == 0 ) cout << endl;     
+        if( (i+1) % cols == 0 ) cout << endl;     
     }
     cout << endl;
 }
 
+void incrementPrefixes( string word ){
+    int len = word.length(), i;
+    string prefix;
+
+    for(i = 0; i < len; i++){
+        prefix += word[i];
+        if( prefixes.find(prefix) != prefixes.end() ){
+            prefixes[prefix]++;
+        }else{
+            prefixes[prefix] = 1;
+        }
+    }
+}
+
+//also erases prefixes who's count has reached 0
+void decrementPrefixes( string word ){
+    int len = word.length(), i;
+    string prefix;
+
+    for(i = 0; i < len; i++){
+        prefix += word[i];
+        if( prefixes.find(prefix) != prefixes.end() ){
+            prefixes[prefix]--;
+        }
+        if( prefixes[prefix] <= 0 ) prefixes.erase( prefix );
+    }
+}
+
 // load dictionary into hash table
-void buildDict()
+void buildDict( string dictFile )
 {
     ifstream in_file;
-    //http://www.cs.duke.edu/courses/cps100/spring05/assign/boggle/code/bogwords.txt
-    in_file.open("bogwords.txt");
+    in_file.open( dictFile.c_str() ); //official scrabble players dictionary
     string word;
-    string prefix;
-    int i;
     int len;
+    int i;
 
     while( getline(in_file,word) )
     {
         len = word.length();
-        dict[word] = true;
+        if( len >= 3 ){ //per Boggle rules
+            dict[word] = true;
 
-
-        prefix = "";
-        for(i = 0; i < len; i++){
-            prefix += word[i];
-            prefixes[prefix] = true;
+            //track how many times each segment of a word appears in the dictionary
+            incrementPrefixes( word );
         }
     }
-    cout << "words: " << dict.size() << endl;
 }
 
 // searched = used cubes on the board
-void find(int i, string str, vector<bool> searched){
+void find(int i, string str, vector<bool> searched, string &board, int neighbors[]){
     str += board[i];
     if(board[i] == 'q') str += 'u';
-    if( searched[i] || (board[i] == '*') || !prefixes[str]   ) return; //|| (prefixes[str] == 0)
-    
-    if( dict[str] ) words[str] = true;
+
+    // if( prefixes.find(str) == prefixes.end() ) duplicates++;
+    if( searched[i] || (board[i] == '*') || (prefixes.find(str) == prefixes.end())   ) return; 
+    if( dict.find(str) != dict.end() ){ 
+        if( words.find(str) != words.end() ) duplicates++;
+        words[str] = true;
+        decrementPrefixes( str );
+    }
     searched[i] = true;
 
     //recursion
-    for(int j = 0; j < NUM_NEIGHBORS; j++){
-        find(NEIGHBORS[j] + i, str, searched);
+    for(int j = 0; j < num_neighbors; j++){
+        find(neighbors[j] + i, str, searched, board, neighbors);
     }
     
 }
 
-int main(){
+int main(int argc, char* argv[]){
     string str;
+    string board;
+    string boggleFile = "boggle.txt";
+    string dictFile = "ospd.txt";
     vector <bool> searched;
 
-    for(int i = 0; i < BOARD_SIZE; i++) searched.push_back(false);
+    if( argc > 1 ) boggleFile = argv[1];
+    if( argc > 2 ) dictFile = argv[2];
 
-    init();
-    buildDict();
+    board = readBoggle( boggleFile );
+
+    int board_size = board.length();
+    int cols = sqrt( board_size );
+    int neighbors[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
+
+    for(int i = 0; i < board_size; i++) searched.push_back(false);
+
+    buildDict(dictFile);
 
     clock_t begin = clock();
-    for(int i = 0; i < BOARD_SIZE; i++){
-        find(i, str, searched);
+    for(int i = 0; i < board_size; i++){
+        find(i, str, searched, board, neighbors);
     }
-    printboard();
-    cout << "Words found: " << words.size() << endl;
-    cout << double(clock() - begin) / CLOCKS_PER_SEC << " seconds to search" << endl;
+
+
+    cout    << "================================================" << endl
+            << dict.size() << " words parsed in " << dictFile << endl
+            << words.size() << " words found in "
+            << double(clock() - begin) / CLOCKS_PER_SEC << " seconds" << endl
+            << duplicates << " duplicates" << endl
+            << "================================================" << endl << endl;
     
     //print words
-    // map<string, bool>::iterator p;
-    // for(p = words.begin(); p != words.end(); p++) {
-    //     cout << p->first << endl;
-    // }
+    if( (cols <= 12) || (argc > 3) ){
+        printboard(board_size, board, cols);
+        map<string, bool>::iterator p;
+        for(p = words.begin(); p != words.end(); p++) {
+            cout << p->first << endl;
+        }
+    }else{
+        cout << "Board & word list hidden if size is greater than 10" << endl;
+        cout << "Add -f as a 4th argument to force printing" << endl;
+    }
 }
