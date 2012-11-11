@@ -26,10 +26,27 @@ map <string,bool> patterns;
 
 string readBoggle( string boggleFile ){
     ifstream file;
-    string str;
+    string board;
+    string tmp;
     file.open( boggleFile.c_str() );
-    getline( file, str );
-    return str;
+    getline( file, tmp );
+    int cols = sqrt( tmp.length() ) + 2;
+    int size = cols * cols;
+    int j = 0;
+
+    //add border
+    for(int i = 0; i < size; i++){
+        if( (i < cols) ||           //top
+        ((i+1) % cols == 0) ||      //right
+        (i > cols * (cols -1)) ||   //bot
+        (i % cols == 0) ){             //left
+            board += '*';
+        }else{
+            board += tmp[j];
+            j++;
+        }
+    }
+    return board;
 }   
 
 void printboard(int board_size, string board, int cols){
@@ -48,11 +65,13 @@ void printboard(int board_size, string board, int cols){
 void incrementPrefixes( string word ){
     int len = word.length(), i;
     string prefix;
+    map<string,int>::iterator j;
 
     for(i = 0; i < len; i++){
         prefix += word[i];
-        if( prefixes.find(prefix) != prefixes.end() ){
-            prefixes[prefix]++;
+        j = prefixes.find(prefix);
+        if( j != prefixes.end() ){
+            j->second++;
         }else{
             prefixes[prefix] = 1;
         }
@@ -63,13 +82,15 @@ void incrementPrefixes( string word ){
 void decrementPrefixes( string word ){
     int len = word.length(), i;
     string prefix;
+    map<string,int>::iterator j;
 
     for(i = 0; i < len; i++){
         prefix += word[i];
-        if( prefixes.find(prefix) != prefixes.end() ){
-            prefixes[prefix]--;
+        j = prefixes.find(prefix);
+        if( j != prefixes.end() ){
+            j->second--;
+            if( j->second <= 0 ) prefixes.erase( j );
         }
-        if( prefixes[prefix] <= 0 ) prefixes.erase( prefix );
     }
 }
 
@@ -99,12 +120,14 @@ void find(int i, string str, vector<bool> searched, string &board, int neighbors
     str += board[i];
     if(board[i] == 'q') str += 'u';
 
-    // if( prefixes.find(str) == prefixes.end() ) duplicates++;
     if( searched[i] || (board[i] == '*') || (prefixes.find(str) == prefixes.end())   ) return; 
     if( dict.find(str) != dict.end() ){ 
-        if( words.find(str) != words.end() ) duplicates++;
+        if( words.find(str) != words.end() ){ 
+            duplicates++;
+        }else{
+            decrementPrefixes( str ); //only decrement if this is the first occurance
+        }
         words[str] = true;
-        decrementPrefixes( str );
     }
     searched[i] = true;
 
@@ -157,6 +180,6 @@ int main(int argc, char* argv[]){
         }
     }else{
         cout << "Board & word list hidden if size is greater than 10" << endl;
-        cout << "Add -f as a 4th argument to force printing" << endl;
+        cout << "Add -f as a 3rd argument to force printing" << endl;
     }
 }
