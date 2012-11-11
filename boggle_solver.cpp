@@ -4,12 +4,14 @@
 #include <time.h>
 #include <string>
 #include <map>
+#include <vector>
+
 
 using namespace std;
 
 const int boarder = 1; //create a border of null CUBES so we know when we reach an edge
 const int COLS = 4 + (boarder*2);
-const int board_SIZE = COLS * COLS;
+const int BOARD_SIZE = COLS * COLS;
 const int NUM_NEIGHBORS = 8;
 const int MAX_INPUT = 50; //longest word in dictionary
 
@@ -20,12 +22,14 @@ const int MAX_INPUT = 50; //longest word in dictionary
 const int NEIGHBORS[NUM_NEIGHBORS] = {-1-COLS,-COLS,1-COLS,-1,1,COLS-1,COLS,COLS+1};
 
 
-char board[board_SIZE];
-map <string,int> dict;
+char board[BOARD_SIZE];
+map <string,bool> dict;
+map <string,bool> prefixes;
+map <string,bool> words; //found words
 
 //based on http://boardgamegeek.com/thread/300883/letter-distribution
 const int NUM_GROUPS = 11;
-const string LETTER_GROUPS[NUM_GROUPS] = {"E","T","AR","INO","S","D","CHL","FMPU","GY","W","BJKQVXZ"};
+const string LETTER_GROUPS[NUM_GROUPS] = {"e","t","ar","ino","s","d","chl","fmpu","gy","w","bjkqvxz"};
 const int LETTER_GROUP_FREQ[NUM_GROUPS] = {19,13,12,11,9,6,5,4,3,2,1};
 
 
@@ -37,7 +41,7 @@ void init(){
     srand( time(NULL) );
 
     //setup random board
-    for(int i = 0; i < board_SIZE; i++){
+    for(int i = 0; i < BOARD_SIZE; i++){
         if( (i < COLS) ||           //top
         ((i+1) % COLS == 0) ||      //right
         (i > COLS * (COLS -1)) ||   //bot
@@ -53,7 +57,7 @@ void init(){
 }   
 
 void printboard(){
-    for(int i = 0; i < board_SIZE; i++){
+    for(int i = 0; i < BOARD_SIZE; i++){
         char c = board[i];
         if( c == 'Q' ){ 
             cout << c << 'u';
@@ -86,29 +90,69 @@ void printNeighbors( int x ){
 void buildDict()
 {
     ifstream in_file;
-    in_file.open("ospd.txt");
-    string temp;
-    int i = 0;
+    in_file.open("bogwords.txt"); //Official Scrabble Players Dictionary
+    string word;
+    string prefix;
+    int i, j = 0;
+    int len;
     //extra paragraph returns in dictionary will break this
-    while( getline(in_file,temp) )
+    while( getline(in_file,word) )
     {
-        dict[temp] = 1;
-        // if( dict["blah"] == 0 ) cout << "not found" << endl;
-        // if( i > 1 ) break;
+        len = word.length();
+        dict[word] = true;
 
-        // i++;
+
+        prefix = "";
+        for(i = 0; i < len; i++){
+            prefix += word[i];
+            prefixes[prefix] = true;
+        }
+        // if( dict["blah"] == 0 ) cout << "not found" << endl;
+        // if( j > 1 ) break;
+
+        // j++;
     }
     cout << "words: " << dict.size() << endl;
+    cout << "prefixes: " << prefixes.size() << endl;
 }
 
+// i = board index
+// searched = used cubes on the board
+void find(int i, string str, vector<bool> searched, int depth){
+    if( depth > 3 ) return;
+    if( searched[i] || (board[i] == '*')   ) return; //|| (prefixes[str] == 0)
+    
+    str += board[i];
+    if( dict[str] ) words[str] = true;
+    searched[i] = true;
+    depth++;
+
+    //recursion
+    for(int j = 0; j < NUM_NEIGHBORS; j++){
+        find(NEIGHBORS[j] + i, str, searched, depth);
+    }
+    
+}
 
 int main(){
-    
-    // init();
-    // cout << endl;
-    // printboard();
-    // cout << endl;
+    string str;
+    vector <bool> searched;
+
+    for(int i = 0; i < BOARD_SIZE; i++) searched.push_back(false);
+
+    init();
+    cout << endl;
+    printboard();
+    cout << endl;
     // printNeighbors( 6 );
 
    buildDict();
+   for(int i = 0; i < BOARD_SIZE; i++){
+       find(i, str, searched, 0);
+   }
+   cout << "Words found: " << words.size() << endl;
+   map<string, bool>::iterator p;
+   // for(p = words.begin(); p != words.end(); p++) {
+   //     cout << p->first << endl;
+   //   }
 }
