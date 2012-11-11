@@ -15,6 +15,7 @@ const int num_neighbors = 8;
 const int MAX_INPUT = 50; //longest word in dictionary
 
 int duplicates = 0;
+clock_t begin; //used to time search duration
 
 
 map <string,bool> dict;
@@ -24,7 +25,7 @@ map <string,bool> patterns;
 
 
 
-string readBoggle( string boggleFile ){
+string buildBoard( string boggleFile ){
     ifstream file;
     string board;
     string tmp;
@@ -49,17 +50,26 @@ string readBoggle( string boggleFile ){
     return board;
 }   
 
-void printboard(int board_size, string board, int cols){
-    for(int i = 0; i < board_size; i++){
+void printboard(string board, ofstream &file){
+    int len = board.length();
+    int cols = sqrt( len );
+    for(int i = 0; i < len; i++){
         char c = board[i];
-        if( c == 'Q' ){ 
-            cout << c << 'u';
+        if( c == 'q' ){ 
+            file << "Qu";
         }else{
-            cout << c << ' ';
+            file << c << ' ';
         }
-        if( (i+1) % cols == 0 ) cout << endl;     
+        if( (i+1) % cols == 0 ) file << endl;     
     }
-    cout << endl;
+    file << endl;
+}
+
+void printWords( ofstream &file ){
+    map<string, bool>::iterator p;
+    for(p = words.begin(); p != words.end(); p++) {
+        file << p->first << endl;
+    }
 }
 
 void incrementPrefixes( string word ){
@@ -138,48 +148,49 @@ void find(int i, string str, vector<bool> searched, string &board, int neighbors
     
 }
 
-int main(int argc, char* argv[]){
+void findWords( string board ){
     string str;
-    string board;
+    vector <bool> searched;
+    int len = board.length();
+    int cols = sqrt( len );
+    int neighbors[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
+
+    for(int i = 0; i < len; i++) searched.push_back(false);
+    begin = clock();
+
+    for(int i = 0; i < len; i++){
+        find(i, str, searched, board, neighbors);
+    }
+}
+
+void saveResults( string board ){
+    ofstream file;
+    string fname = "results.txt";
+    file.open( fname.c_str() );
+    printboard( board, file );
+    printWords( file );
+    file.close();
+    cout    << "Results saved to " << fname << endl
+            << "================================================" << endl << endl;
+
+}
+
+int main(int argc, char* argv[]){
     string boggleFile = "boggle.txt";
     string dictFile = "ospd.txt";
-    vector <bool> searched;
 
     if( argc > 1 ) boggleFile = argv[1];
     if( argc > 2 ) dictFile = argv[2];
 
-    board = readBoggle( boggleFile );
-
-    int board_size = board.length();
-    int cols = sqrt( board_size );
-    int neighbors[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
-
-    for(int i = 0; i < board_size; i++) searched.push_back(false);
-
-    buildDict(dictFile);
-
-    clock_t begin = clock();
-    for(int i = 0; i < board_size; i++){
-        find(i, str, searched, board, neighbors);
-    }
-
+    string board = buildBoard( boggleFile );
+    buildDict( dictFile );
+    findWords( board );
 
     cout    << "================================================" << endl
             << dict.size() << " words parsed in " << dictFile << endl
             << words.size() << " words found in "
             << double(clock() - begin) / CLOCKS_PER_SEC << " seconds" << endl
-            << duplicates << " duplicates" << endl
-            << "================================================" << endl << endl;
-    
-    //print words
-    if( (cols <= 12) || (argc > 3) ){
-        printboard(board_size, board, cols);
-        map<string, bool>::iterator p;
-        for(p = words.begin(); p != words.end(); p++) {
-            cout << p->first << endl;
-        }
-    }else{
-        cout << "Board & word list hidden if size is greater than 10" << endl;
-        cout << "Add -f as a 3rd argument to force printing" << endl;
-    }
+            << duplicates << " duplicates found" << endl;
+            
+    saveResults( board );
 }
