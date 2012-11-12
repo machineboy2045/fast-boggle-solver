@@ -1,13 +1,10 @@
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
-#include <time.h>
 #include <math.h>
-#include <string>
+#include <time.h>
 #include <map>
 #include <vector>
-#include <ctime>
-
 
 using namespace std;
 
@@ -21,8 +18,6 @@ clock_t begin; //used to time search duration
 map <string,bool> dict;
 map <string,int> prefixes;
 map <string,bool> words; //found words
-map <string,bool> patterns;
-
 
 
 string buildBoard( string boggleFile ){
@@ -30,24 +25,29 @@ string buildBoard( string boggleFile ){
     string board;
     string tmp;
     file.open( boggleFile.c_str() );
-    getline( file, tmp );
-    int cols = sqrt( tmp.length() ) + 2;
-    int size = cols * cols;
-    int j = 0;
+    if( file ){
+        getline( file, tmp );
+        int cols = sqrt( tmp.length() ) + 2;
+        int size = cols * cols;
+        int j = 0;
 
-    //add border
-    for(int i = 0; i < size; i++){
-        if( (i < cols) ||           //top
-        ((i+1) % cols == 0) ||      //right
-        (i > cols * (cols -1)) ||   //bot
-        (i % cols == 0) ){             //left
-            board += '*';
-        }else{
-            board += tmp[j];
-            j++;
+        //add border
+        for(int i = 0; i < size; i++){
+            if( (i < cols) ||           //top
+            ((i+1) % cols == 0) ||      //right
+            (i > cols * (cols -1)) ||   //bot
+            (i % cols == 0) ){             //left
+                board += '*';
+            }else{
+                board += tmp[j];
+                j++;
+            }
         }
+        return board;
+    }else{
+        cout << "ERROR: Board " << boggleFile << " could not be found. Exiting." << endl;
+        exit(0);
     }
-    return board;
 }   
 
 void printboard(string board, ofstream &file){
@@ -109,19 +109,24 @@ void buildDict( string dictFile )
 {
     ifstream in_file;
     in_file.open( dictFile.c_str() ); //official scrabble players dictionary
-    string word;
-    int len;
-    int i;
+    if( in_file ){
+        string word;
+        int len;
+        int i;
 
-    while( getline(in_file,word) )
-    {
-        len = word.length();
-        if( len >= 3 ){ //per Boggle rules
-            dict[word] = true;
+        while( getline(in_file,word) )
+        {
+            len = word.length();
+            if( len >= 3 ){ //per Boggle rules
+                dict[word] = true;
 
-            //track how many times each segment of a word appears in the dictionary
-            incrementPrefixes( word );
+                //track how many times each segment of a word appears in the dictionary
+                incrementPrefixes( word );
+            }
         }
+    }else{
+        cout << "ERROR: Dictionary " << dictFile << " could not be found. Exiting." << endl;
+        exit(0);
     }
 }
 
@@ -191,6 +196,6 @@ int main(int argc, char* argv[]){
             << words.size() << " words found in "
             << double(clock() - begin) / CLOCKS_PER_SEC << " seconds" << endl
             << duplicates << " duplicates found" << endl;
-            
+
     saveResults( board );
 }
