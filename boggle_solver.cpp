@@ -197,8 +197,6 @@ int main(int argc, char* argv[]){
     cout    << "================================================" << endl
             << dict.size() << " words parsed in " << dictFile << endl
             << "Word length limit of " << MAX_WORD_LENGTH << " characters" << endl;
-            // << double(clock() - begin) / CLOCKS_PER_SEC << " seconds spent reducing map" << endl
-            // << invalidParts << " nodes that cannot form a valid word fragment with their children" << endl << endl;
     
     begin = clock();
     findWords( board );
