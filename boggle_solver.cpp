@@ -9,14 +9,12 @@
 using namespace std;
 
 const int num_neighbors = 8;
-const int MAX_WORD_LENGTH = 15; //longest word in dictionary
-const int MAX_DEPTH = 5; //used by map reduce
+const int MAX_WORD_LENGTH = 15; //longest word read in dictionary
 
 int duplicates = 0;
+int checkedNodes = 0;
 string longestWord;
 clock_t begin; //used to time search duration
-int checkedNodes = 0;
-int invalidParts = 0;
 
 
 map <string,bool> dict;
@@ -110,26 +108,6 @@ void decrementPrefixes( string word ){
     }
 }
 
-void hashParts( string word ){
-    int i, j, len = word.length();
-    string str;
-    for(i = 0; i < len; i++){
-        str = "";
-        for(j = i; j < len; j++){
-            str += word[j];
-            parts[str] = true;
-        }
-    }
-
-    for(i = len-1; i >= 0; i--){
-        str = "";
-        for(j = i; j >= 0; j--){
-            str += word[j];
-            parts[str] = true;
-        }
-    }
-}
-
 // load dictionary into hash table
 void buildDict( string dictFile )
 {
@@ -137,8 +115,7 @@ void buildDict( string dictFile )
     in_file.open( dictFile.c_str() ); //official scrabble players dictionary
     if( in_file ){
         string word;
-        int len;
-        int i;
+        int len, i;
 
         while( getline(in_file,word) )
         {
@@ -148,7 +125,6 @@ void buildDict( string dictFile )
 
                 //track how many times each segment of a word appears in the dictionary
                 incrementPrefixes( word );
-                // hashParts( word );
             }
         }
     }else{
@@ -157,50 +133,6 @@ void buildDict( string dictFile )
     }
 }
 
-
-// searched = used cubes on the board
-bool usableNode(int i, string str, vector<bool> searched, string &board, int children[], int depth){
-    if( board[i] == '*' ) return false;
-    if( searched[i] ) return true;
-    // string ngram;
-    // if( str.length() ) ngram += str[str.length()-1];
-    // ngram += board[i];
-    str += board[i];
-    if(board[i] == 'q') str += 'u';
-    if(  parts.find(str) == parts.end() ) return false; //if this is not a part of any word
-
-
-    // if(prefixes.find(str) == prefixes.end())   ) return true; 
-    searched[i] = true;
-    if( depth == MAX_DEPTH ) return true; //all the characters in the string are still valid parts
-    //recursion
-    bool usable = false;
-    depth++;
-    // cout << "searching children at depth " << depth << endl;
-    for(int j = 0; j < num_neighbors; j++){
-        if( usableNode(children[j] + i, str, searched, board, children, depth) ) usable = true;
-    }
-    return usable;
-}
-
-void mapReduce( string &board ){
-    string str;
-    vector <bool> searched;
-    int len = board.length();
-    int cols = sqrt( len );
-    int children[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
-
-    for(int i = 0; i < len; i++) searched.push_back(false);
-
-    for(int i = 0; i < len; i++){
-        if( board[i] != '*' ){
-            if( !usableNode(i, str, searched, board, children, 1) ){ 
-                invalidParts++;
-                board[i] = '*';
-            }
-        }
-    }
-}
 void find(int node, string str, vector<bool> searched, string &board, int children[]){
     if((board[node] == '*') || searched[node]) return;
     
@@ -222,7 +154,7 @@ void find(int node, string str, vector<bool> searched, string &board, int childr
 
     int j = 0;
     while( j < 8 ){
-        find(node + children[j++], str, searched, board, children); 
+        find(node + children[j++], str, searched, board, children); //tail recursion transformed to loop by compiler
     }
 }
 
@@ -262,10 +194,6 @@ int main(int argc, char* argv[]){
     string board = buildBoard( boggleFile );
     buildDict( dictFile );
 
-    begin = clock();
-    // for(int i = 0; i < 7; i++){
-    //     mapReduce( board );
-    // }
     cout    << "================================================" << endl
             << dict.size() << " words parsed in " << dictFile << endl
             << "Word length limit of " << MAX_WORD_LENGTH << " characters" << endl;
@@ -274,8 +202,8 @@ int main(int argc, char* argv[]){
     
     begin = clock();
     findWords( board );
-    cout
-            << words.size() << " words found in "
+
+    cout    << words.size() << " words found in "
             << double(clock() - begin) / CLOCKS_PER_SEC << " seconds" << endl
             << checkedNodes << " nodes checked " << endl
             << duplicates << " duplicate words found" << endl;
