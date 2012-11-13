@@ -9,14 +9,19 @@
 using namespace std;
 
 const int num_neighbors = 8;
-const int MAX_INPUT = 50; //longest word in dictionary
+const int MAX_WORD_LENGTH = 15; //longest word in dictionary
+const int MAX_DEPTH = 5; //used by map reduce
 
 int duplicates = 0;
+string longestWord;
 clock_t begin; //used to time search duration
+int checkedNodes = 0;
+int invalidParts = 0;
 
 
 map <string,bool> dict;
 map <string,int> prefixes;
+map <string,bool> parts; //all parts valid parts of words
 map <string,bool> words; //found words
 
 
@@ -65,9 +70,10 @@ void printboard(string board, ofstream &file){
     file << endl;
 }
 
-void printWords( ofstream &file ){
+void printWords( ofstream &file ){    
     map<string, bool>::iterator p;
     for(p = words.begin(); p != words.end(); p++) {
+        if( longestWord.length() < p->first.length() ) longestWord = p->first;
         file << p->first << endl;
     }
 }
@@ -104,6 +110,26 @@ void decrementPrefixes( string word ){
     }
 }
 
+void hashParts( string word ){
+    int i, j, len = word.length();
+    string str;
+    for(i = 0; i < len; i++){
+        str = "";
+        for(j = i; j < len; j++){
+            str += word[j];
+            parts[str] = true;
+        }
+    }
+
+    for(i = len-1; i >= 0; i--){
+        str = "";
+        for(j = i; j >= 0; j--){
+            str += word[j];
+            parts[str] = true;
+        }
+    }
+}
+
 // load dictionary into hash table
 void buildDict( string dictFile )
 {
@@ -117,11 +143,12 @@ void buildDict( string dictFile )
         while( getline(in_file,word) )
         {
             len = word.length();
-            if( len >= 3 ){ //per Boggle rules
+            if( (len >= 3) && (len <= MAX_WORD_LENGTH) ){ //per Boggle rules
                 dict[word] = true;
 
                 //track how many times each segment of a word appears in the dictionary
                 incrementPrefixes( word );
+                // hashParts( word );
             }
         }
     }else{
@@ -130,12 +157,60 @@ void buildDict( string dictFile )
     }
 }
 
+
 // searched = used cubes on the board
-void find(int i, string str, vector<bool> searched, string &board, int neighbors[]){
+bool usableNode(int i, string str, vector<bool> searched, string &board, int children[], int depth){
+    if( board[i] == '*' ) return false;
+    if( searched[i] ) return true;
+    // string ngram;
+    // if( str.length() ) ngram += str[str.length()-1];
+    // ngram += board[i];
     str += board[i];
     if(board[i] == 'q') str += 'u';
+    if(  parts.find(str) == parts.end() ) return false; //if this is not a part of any word
 
-    if( searched[i] || (board[i] == '*') || (prefixes.find(str) == prefixes.end())   ) return; 
+
+    // if(prefixes.find(str) == prefixes.end())   ) return true; 
+    searched[i] = true;
+    if( depth == MAX_DEPTH ) return true; //all the characters in the string are still valid parts
+    //recursion
+    bool usable = false;
+    depth++;
+    // cout << "searching children at depth " << depth << endl;
+    for(int j = 0; j < num_neighbors; j++){
+        if( usableNode(children[j] + i, str, searched, board, children, depth) ) usable = true;
+    }
+    return usable;
+}
+
+void mapReduce( string &board ){
+    string str;
+    vector <bool> searched;
+    int len = board.length();
+    int cols = sqrt( len );
+    int children[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
+
+    for(int i = 0; i < len; i++) searched.push_back(false);
+
+    for(int i = 0; i < len; i++){
+        if( board[i] != '*' ){
+            if( !usableNode(i, str, searched, board, children, 1) ){ 
+                invalidParts++;
+                board[i] = '*';
+            }
+        }
+    }
+}
+void find(int node, string str, vector<bool> searched, string &board, int children[]){
+    if((board[node] == '*') || searched[node]) return;
+    
+    checkedNodes++;
+    searched[node] = true;
+
+    str += board[node];
+    if(board[node] == 'q') str += 'u';
+
+    if( prefixes.find(str) == prefixes.end() ) return; 
     if( dict.find(str) != dict.end() ){ 
         if( words.find(str) != words.end() ){ 
             duplicates++;
@@ -144,27 +219,23 @@ void find(int i, string str, vector<bool> searched, string &board, int neighbors
         }
         words[str] = true;
     }
-    searched[i] = true;
 
-    //recursion
-    for(int j = 0; j < num_neighbors; j++){
-        find(neighbors[j] + i, str, searched, board, neighbors);
+    int j = 0;
+    while( j < 8 ){
+        find(node + children[j++], str, searched, board, children); 
     }
-    
 }
 
-void findWords( string board ){
+void findWords( string &board ){
     string str;
     vector <bool> searched;
     int len = board.length();
     int cols = sqrt( len );
-    int neighbors[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
+    int children[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
 
     for(int i = 0; i < len; i++) searched.push_back(false);
-    begin = clock();
-
     for(int i = 0; i < len; i++){
-        find(i, str, searched, board, neighbors);
+        find(i, str, searched, board, children);
     }
 }
 
@@ -175,27 +246,39 @@ void saveResults( string board ){
     printboard( board, file );
     printWords( file );
     file.close();
-    cout    << "Results saved to " << fname << endl
+    cout    << "\"" << longestWord << "\" was the longest word found (" << longestWord.length() << " characters)" << endl
+            << "Results saved to " << fname << endl
             << "================================================" << endl << endl;
 
 }
 
 int main(int argc, char* argv[]){
     string boggleFile = "boggle.txt";
-    string dictFile = "ospd.txt";
+    string dictFile = "mydictionary.txt";
 
     if( argc > 1 ) boggleFile = argv[1];
     if( argc > 2 ) dictFile = argv[2];
 
     string board = buildBoard( boggleFile );
     buildDict( dictFile );
-    findWords( board );
 
+    begin = clock();
+    // for(int i = 0; i < 7; i++){
+    //     mapReduce( board );
+    // }
     cout    << "================================================" << endl
             << dict.size() << " words parsed in " << dictFile << endl
+            << "Word length limit of " << MAX_WORD_LENGTH << " characters" << endl;
+            // << double(clock() - begin) / CLOCKS_PER_SEC << " seconds spent reducing map" << endl
+            // << invalidParts << " nodes that cannot form a valid word fragment with their children" << endl << endl;
+    
+    begin = clock();
+    findWords( board );
+    cout
             << words.size() << " words found in "
             << double(clock() - begin) / CLOCKS_PER_SEC << " seconds" << endl
-            << duplicates << " duplicates found" << endl;
+            << checkedNodes << " nodes checked " << endl
+            << duplicates << " duplicate words found" << endl;
 
     saveResults( board );
 }
