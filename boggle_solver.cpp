@@ -3,24 +3,35 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include <map>
+// #include <dense_hash_map>
+#include <sparsehash/dense_hash_map>
 #include <vector>
 
 using namespace std;
+using google::dense_hash_map;      // namespace where class lives by default
+using tr1::hash;  // or __gnu_cxx::hash, or maybe tr1::hash, depending on your OS
+
 
 const int num_neighbors = 8;
-const int MAX_WORD_LENGTH = 15; //longest word read in dictionary
+const int MAX_WORD_LENGTH = 50; //longest word read in dictionary
 
 int duplicates = 0;
 int checkedNodes = 0;
 string longestWord;
 clock_t begin; //used to time search duration
+string board;
+int board_size;
+int cols;
+int children[num_neighbors];
 
 
-map <string,bool> dict;
-map <string,int> prefixes;
-map <string,bool> parts; //all parts valid parts of words
-map <string,bool> words; //found words
+
+
+
+dense_hash_map <string, bool>  dict;
+dense_hash_map <string,int> prefixes;
+dense_hash_map <string,bool> words; //found words
+
 
 
 string buildBoard( string boggleFile ){
@@ -69,7 +80,7 @@ void printboard(string board, ofstream &file){
 }
 
 void printWords( ofstream &file ){    
-    map<string, bool>::iterator p;
+    dense_hash_map<string, bool>::iterator p;
     for(p = words.begin(); p != words.end(); p++) {
         if( longestWord.length() < p->first.length() ) longestWord = p->first;
         file << p->first << endl;
@@ -79,7 +90,7 @@ void printWords( ofstream &file ){
 void incrementPrefixes( string word ){
     int len = word.length(), i;
     string prefix;
-    map<string,int>::iterator j;
+    dense_hash_map<string,int>::iterator j;
 
     for(i = 0; i < len; i++){
         prefix += word[i];
@@ -96,7 +107,7 @@ void incrementPrefixes( string word ){
 void decrementPrefixes( string word ){
     int len = word.length(), i;
     string prefix;
-    map<string,int>::iterator j;
+    dense_hash_map<string,int>::iterator j;
 
     for(i = 0; i < len; i++){
         prefix += word[i];
@@ -112,7 +123,7 @@ void decrementPrefixes( string word ){
 void buildDict( string dictFile )
 {
     ifstream in_file;
-    in_file.open( dictFile.c_str() ); //official scrabble players dictionary
+    in_file.open( dictFile.c_str() );
     if( in_file ){
         string word;
         int len, i;
@@ -133,8 +144,8 @@ void buildDict( string dictFile )
     }
 }
 
-void find(int node, string str, vector<bool> searched, string &board, int children[]){
-    if((board[node] == '*') || searched[node]) return;
+void find(int node, string str, vector<bool> searched){
+    
     
     checkedNodes++;
     searched[node] = true;
@@ -154,24 +165,25 @@ void find(int node, string str, vector<bool> searched, string &board, int childr
 
     int j = 0;
     while( j < 8 ){
-        find(node + children[j++], str, searched, board, children); //tail recursion transformed to loop by compiler
+        int child = node + children[j++];
+        if((board[child] != '*') && !searched[child]){ //faster to check here
+            find(child, str, searched); //tail recursion transformed to loop by compiler
+        }
     }
 }
 
-void findWords( string &board ){
+void findWords(){
     string str;
     vector <bool> searched;
-    int len = board.length();
-    int cols = sqrt( len );
-    int children[num_neighbors] = {-1-cols,-cols,1-cols,-1,1,cols-1,cols,cols+1};
-
-    for(int i = 0; i < len; i++) searched.push_back(false);
-    for(int i = 0; i < len; i++){
-        find(i, str, searched, board, children);
+    for(int i = 0; i < board_size; i++) searched.push_back(false);
+    for(int i = 0; i < board_size; i++){
+        if(board[i] != '*'){
+            find(i, str, searched);
+        }
     }
 }
 
-void saveResults( string board ){
+void saveResults(){
     ofstream file;
     string fname = "results.txt";
     file.open( fname.c_str() );
@@ -185,13 +197,28 @@ void saveResults( string board ){
 }
 
 int main(int argc, char* argv[]){
+    dict.set_empty_key("");
+    prefixes.set_empty_key("");
+    prefixes.set_deleted_key("*");
+    words.set_empty_key("");
+
     string boggleFile = "boggle.txt";
     string dictFile = "mydictionary.txt";
 
     if( argc > 1 ) boggleFile = argv[1];
     if( argc > 2 ) dictFile = argv[2];
 
-    string board = buildBoard( boggleFile );
+    board = buildBoard( boggleFile );
+    board_size = board.length();
+    cols = sqrt( board_size );
+    children[0] = -1-cols;
+    children[1] = -cols;
+    children[2] = 1-cols;
+    children[3] = -1;
+    children[4] = 1;
+    children[5] = cols-1;
+    children[6] = cols;
+    children[7] = cols+1;
     buildDict( dictFile );
 
     cout    << "================================================" << endl
@@ -199,12 +226,12 @@ int main(int argc, char* argv[]){
             << "Word length limit of " << MAX_WORD_LENGTH << " characters" << endl;
     
     begin = clock();
-    findWords( board );
+    findWords();
 
     cout    << words.size() << " words found in "
             << double(clock() - begin) / CLOCKS_PER_SEC << " seconds" << endl
             << checkedNodes << " nodes checked " << endl
             << duplicates << " duplicate words found" << endl;
 
-    saveResults( board );
+    saveResults();
 }
