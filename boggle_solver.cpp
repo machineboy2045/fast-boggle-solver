@@ -3,115 +3,244 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-// #include <dense_hash_map>
+#include <string.h>
 #include <sparsehash/dense_hash_map>
 #include <vector>
+#include <map>
 
 using namespace std;
 using google::dense_hash_map;      // namespace where class lives by default
-using tr1::hash;  // or __gnu_cxx::hash, or maybe tr1::hash, depending on your OS
 
 
 const int num_neighbors = 8;
-const int MAX_WORD_LENGTH = 50; //longest word read in dictionary
+const int WSIZE = 20; //longest word read in dictionary
 
 int duplicates = 0;
 int checkedNodes = 0;
-string longestWord;
+char longestWord[WSIZE];
 clock_t begin; //used to time search duration
-string board;
+char * board;
 int board_size;
 int cols;
 int children[num_neighbors];
 
 
+struct ltstr
+{
+  bool operator()(const char* s1, const char* s2) const
+  {
+    return strcmp(s1, s2) < 0;
+  }
+};
+
+map<const char*,bool,ltstr> sorted;
+
+struct eqstr
+{
+  bool operator()(const char* s1, const char* s2) const
+  {
+    return (s1 == s2) || (s1 && s2 && strcmp(s1, s2) == 0);
+  }
+};
 
 
+typedef struct{
+  inline unsigned int operator() (const char * key) const {
+    int seed = 95032;
+    int len = strlen( key );
 
-dense_hash_map <string, bool>  dict;
-dense_hash_map <string,int> prefixes;
-dense_hash_map <string,bool> words; //found words
+    // 'm' and 'r' are mixing constants generated offline.
+    // They're not really 'magic', they just happen to work well.
 
+    const unsigned int m = 0x5bd1e995;
+    const int r = 24;
 
+    // Initialize the hash to a 'random' value
 
-string buildBoard( string boggleFile ){
-    ifstream file;
-    string board;
-    string tmp;
-    file.open( boggleFile.c_str() );
-    if( file ){
-        getline( file, tmp );
-        int cols = sqrt( tmp.length() ) + 2;
-        int size = cols * cols;
-        int j = 0;
+    unsigned int h = seed ^ len;
 
-        //add border
-        for(int i = 0; i < size; i++){
-            if( (i < cols) ||           //top
-            ((i+1) % cols == 0) ||      //right
-            (i > cols * (cols -1)) ||   //bot
-            (i % cols == 0) ){             //left
-                board += '*';
-            }else{
-                board += tmp[j];
-                j++;
-            }
-        }
-        return board;
-    }else{
-        cout << "ERROR: Board " << boggleFile << " could not be found. Exiting." << endl;
-        exit(0);
+    // Mix 4 bytes at a time into the hash
+
+    const unsigned char * data = (const unsigned char *)key;
+
+    while(len >= 4)
+    {
+        unsigned int k = *(unsigned int *)data;
+
+        k *= m; 
+        k ^= k >> r; 
+        k *= m; 
+        
+        h *= m; 
+        h ^= k;
+
+        data += 4;
+        len -= 4;
     }
+    
+    // Handle the last few bytes of the input array
+
+    switch(len)
+    {
+    case 3: h ^= data[2] << 16;
+    case 2: h ^= data[1] << 8;
+    case 1: h ^= data[0];
+            h *= m;
+    };
+
+    // Do a few final mixes of the hash to ensure the last few
+    // bytes are well-incorporated.
+
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
+
+
+  }
+} MurmurHash;
+
+
+dense_hash_map <const char*, bool, MurmurHash, eqstr>  dict;
+dense_hash_map <const char*, int, MurmurHash, eqstr> prefixes;
+dense_hash_map <const char*, bool, MurmurHash, eqstr> words; //found words
+
+
+char* readF( char fname[] ){
+    FILE * pFile;
+    long lSize;
+    char * buffer;
+    size_t result;
+
+    pFile = fopen ( fname , "r" );
+    if (pFile==NULL) {fputs ("File error",stderr); exit (1);}
+
+    // obtain file size:
+    fseek (pFile , 0 , SEEK_END);
+    lSize = ftell (pFile);
+    rewind (pFile);
+
+    // allocate memory to contain the whole file:
+    buffer = (char*) malloc (sizeof(char)*lSize);
+    if (buffer == NULL) {fputs ("Memory error",stderr); exit (2);}
+
+    // copy the file into the buffer:
+    result = fread (buffer,1,lSize,pFile);
+    if (result != lSize) {fputs ("Reading error",stderr); exit (3);}
+
+    /* the whole file is now loaded in the memory buffer. */
+    // printf("boggle_easy: %s\n", buffer);
+
+    // terminate
+    fclose (pFile);
+    // free (buffer);
+    return buffer;
+}
+
+char* buildBoard( char boggleFile[] ){
+    char * buffer = readF( boggleFile );
+    int len = strlen( buffer );
+    int cols = sqrt( len ) + 2;
+    int size = cols * cols;
+    char* board = new char[size+1];
+    int j = 0;
+
+    //add border
+    for(int i = 0; i < size; i++){
+        if( (i < cols) ||           //top
+        ((i+1) % cols == 0) ||      //right
+        (i > cols * (cols -1)) ||   //bot
+        (i % cols == 0) ){             //left
+            board[i] = '*';
+        }else{
+            board[i] = buffer[j];
+            j++;
+        }
+        board[i+1] = '\0';
+    }
+    return board;
 }   
 
-void printboard(string board, ofstream &file){
-    int len = board.length();
+void printboard( FILE * file ){
+    int len = strlen(board);
     int cols = sqrt( len );
+    char str[] = "  ";
     for(int i = 0; i < len; i++){
-        char c = board[i];
-        if( c == 'q' ){ 
-            file << "Qu";
+        str[0] = board[i];
+        if( board[i] == 'q' ){ 
+            fputs("Qu",file);
         }else{
-            file << c << ' ';
+            fputs(str,file);
         }
-        if( (i+1) % cols == 0 ) file << endl;     
+        if( (i+1) % cols == 0 ) fputs("\n",file);     
     }
-    file << endl;
+    fputs("\n",file);
 }
 
-void printWords( ofstream &file ){    
-    dense_hash_map<string, bool>::iterator p;
+// void printWords( ofstream &file ){    
+//     dense_hash_map<string, bool, MurmurHash, eqstr>::iterator p;
+//     for(p = words.begin(); p != words.end(); p++) {
+//         if( longestWord.length() < p->first.length() ) longestWord = p->first;
+//         file << p->first << endl;
+//     }
+// }
+
+void printWords( FILE * file ){    
+    dense_hash_map<const char*, bool, MurmurHash, eqstr>::iterator p;
+    map<const char*, bool, ltstr>::iterator m;
     for(p = words.begin(); p != words.end(); p++) {
-        if( longestWord.length() < p->first.length() ) longestWord = p->first;
-        file << p->first << endl;
+        if( strlen(longestWord) < strlen(p->first) ) strcpy(longestWord, p->first);
+        sorted[p->first] = true;
     }
+
+    //alphabetized
+    for(m = sorted.begin(); m != sorted.end(); m++) {
+        fputs (m->first,file);
+        fputs ("\n",file);
+    }
+
+    
 }
 
-void incrementPrefixes( string word ){
-    int len = word.length(), i;
-    string prefix;
-    dense_hash_map<string,int>::iterator j;
+void incrementPrefixes( char word[] ){
+    int len = strlen(word), i;
+    char pre[len+1];
+    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
+    
 
     for(i = 0; i < len; i++){
-        prefix += word[i];
-        j = prefixes.find(prefix);
+        pre[i] = word[i];
+        pre[i+1] = '\0';
+
+        j = prefixes.find(pre);
         if( j != prefixes.end() ){
             j->second++;
         }else{
-            prefixes[prefix] = 1;
+            char * copy = new char[len+1];
+
+            // copy = "test";
+            strcpy(copy,pre);
+            // if( strcmp(copy,c) == 0 ) cout << "same" << endl;
+            // const char * p = pre;
+            // cout << "[" << copy << "]" << endl;
+            prefixes[copy] = 1;
         }
     }
+    // exit(1);
 }
 
 //also erases prefixes who's count has reached 0
-void decrementPrefixes( string word ){
-    int len = word.length(), i;
-    string prefix;
-    dense_hash_map<string,int>::iterator j;
+void decrementPrefixes( const char * word ){
+    int len = strlen(word), i;
+    char pre[len+1];
+    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
 
     for(i = 0; i < len; i++){
-        prefix += word[i];
-        j = prefixes.find(prefix);
+        pre[i] = word[i];
+        pre[i+1] = '\0';
+
+        j = prefixes.find(pre);
         if( j != prefixes.end() ){
             j->second--;
             if( j->second <= 0 ) prefixes.erase( j );
@@ -120,96 +249,105 @@ void decrementPrefixes( string word ){
 }
 
 // load dictionary into hash table
-void buildDict( string dictFile )
+void buildDict( char dictFile[] )
 {
-    ifstream in_file;
-    in_file.open( dictFile.c_str() );
-    if( in_file ){
-        string word;
-        int len, i;
+    char * buffer = readF( dictFile );
+    char * word;
+    int len, i;
+    // printf("boggle_easy: %s\n", buffer);
 
-        while( getline(in_file,word) )
-        {
-            len = word.length();
-            if( (len >= 3) && (len <= MAX_WORD_LENGTH) ){ //per Boggle rules
-                dict[word] = true;
-
-                //track how many times each segment of a word appears in the dictionary
-                incrementPrefixes( word );
-            }
+    word = strtok(buffer,"\n\t");
+    while (word != NULL) {
+        len = strlen( word );
+        if( len >= 1 ){ //per Boggle rules
+            incrementPrefixes( word );
+            dict[word] = true;
+            // prefixes[word] = 1;
+            // cout << word << endl;
+            // exit(1);
+            //track how many times each segment of a word appears in the dictionary
         }
-    }else{
-        cout << "ERROR: Dictionary " << dictFile << " could not be found. Exiting." << endl;
-        exit(0);
+        
+        word = strtok (NULL, "\n\t");
     }
 }
-
-void find(int node, string str, vector<bool> searched){
-    
+void find(int node, char str[], vector<bool> searched, int depth){
+    dense_hash_map<const char*,bool, MurmurHash, eqstr>::iterator p;
+    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator q;
     
     checkedNodes++;
     searched[node] = true;
+    if( depth == WSIZE -2 ) return;
 
-    str += board[node];
-    if(board[node] == 'q') str += 'u';
+    str[depth] = board[node];
+    if(board[node] == 'q'){ 
+        str[depth+1] = 'u';
+        depth++;
+    }
+    str[depth+1] = '\0';
 
-    if( prefixes.find(str) == prefixes.end() ) return; 
-    if( dict.find(str) != dict.end() ){ 
+    q = prefixes.find(str);
+    if( q == prefixes.end() ) return; 
+    p = dict.find( str );
+    if( p != dict.end() ){ 
         if( words.find(str) != words.end() ){ 
             duplicates++;
         }else{
-            decrementPrefixes( str ); //only decrement if this is the first occurance
+            decrementPrefixes( q->first ); //only decrement if this is the first occurance
+            words[p->first] = true;
         }
-        words[str] = true;
     }
 
     int j = 0;
     while( j < 8 ){
         int child = node + children[j++];
         if((board[child] != '*') && !searched[child]){ //faster to check here
-            find(child, str, searched); //tail recursion transformed to loop by compiler
+            find(child, str, searched, depth+1); //tail recursion transformed to loop by compiler
         }
     }
 }
 
 void findWords(){
-    string str;
+    char str[WSIZE];
     vector <bool> searched;
     for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
         if(board[i] != '*'){
-            find(i, str, searched);
+            find(i, str, searched, 0);
         }
     }
 }
 
 void saveResults(){
-    ofstream file;
-    string fname = "results.txt";
-    file.open( fname.c_str() );
-    printboard( board, file );
+    FILE * file;
+
+    char fname[] = "results.txt";
+    file = fopen ("mylog.txt","a");
+    printboard( file );
     printWords( file );
-    file.close();
-    cout    << "\"" << longestWord << "\" was the longest word found (" << longestWord.length() << " characters)" << endl
+    cout    << "\"" << longestWord << "\" was the longest word found (" << strlen(longestWord) << " characters)" << endl
             << "Results saved to " << fname << endl
             << "================================================" << endl << endl;
 
+    fclose(file);
 }
 
+
+
 int main(int argc, char* argv[]){
-    dict.set_empty_key("");
-    prefixes.set_empty_key("");
-    prefixes.set_deleted_key("*");
-    words.set_empty_key("");
+    dict.set_empty_key(NULL);
+    prefixes.set_empty_key(NULL);
+    prefixes.set_deleted_key("!");
+    words.set_empty_key(NULL);
 
-    string boggleFile = "boggle.txt";
-    string dictFile = "mydictionary.txt";
+    char boggleFile[] = "boggle_easy.txt";
+    char dictFile[] = "mydictionary.txt";
 
-    if( argc > 1 ) boggleFile = argv[1];
-    if( argc > 2 ) dictFile = argv[2];
+    // if( argc > 1 ) boggleFile = argv[1];
+    // if( argc > 2 ) dictFile = argv[2];
 
     board = buildBoard( boggleFile );
-    board_size = board.length();
+    board_size = strlen( board );
     cols = sqrt( board_size );
     children[0] = -1-cols;
     children[1] = -cols;
@@ -223,7 +361,7 @@ int main(int argc, char* argv[]){
 
     cout    << "================================================" << endl
             << dict.size() << " words parsed in " << dictFile << endl
-            << "Word length limit of " << MAX_WORD_LENGTH << " characters" << endl;
+            << "Word length limit of " << WSIZE << " characters" << endl;
     
     begin = clock();
     findWords();
