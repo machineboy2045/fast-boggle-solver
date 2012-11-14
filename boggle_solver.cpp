@@ -321,7 +321,7 @@ int main(int argc, char* argv[]){
     prefixes.set_deleted_key("!");
     words.set_empty_key(NULL);
 
-    char boggleFile[] = "boggle_easy.txt";
+    char boggleFile[] = "boggle.txt";
     char dictFile[] = "mydictionary.txt";
 
     // if( argc > 1 ) boggleFile = argv[1];
