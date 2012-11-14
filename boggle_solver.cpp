@@ -1,5 +1,4 @@
 #include <iostream>
-#include <fstream>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
@@ -22,7 +21,7 @@ clock_t begin; //used to time search duration
 char * board;
 int board_size;
 int cols;
-int children[num_neighbors];
+int *children;
 
 
 struct ltstr
@@ -130,7 +129,6 @@ char* readF( char fname[] ){
     if (result != lSize) {fputs ("Reading error",stderr); exit (3);}
 
     /* the whole file is now loaded in the memory buffer. */
-    // printf("boggle_easy: %s\n", buffer);
 
     // terminate
     fclose (pFile);
@@ -178,14 +176,6 @@ void printboard( FILE * file ){
     fputs("\n",file);
 }
 
-// void printWords( ofstream &file ){    
-//     dense_hash_map<string, bool, MurmurHash, eqstr>::iterator p;
-//     for(p = words.begin(); p != words.end(); p++) {
-//         if( longestWord.length() < p->first.length() ) longestWord = p->first;
-//         file << p->first << endl;
-//     }
-// }
-
 void printWords( FILE * file ){    
     dense_hash_map<const char*, bool, MurmurHash, eqstr>::iterator p;
     map<const char*, bool, ltstr>::iterator m;
@@ -208,7 +198,6 @@ void incrementPrefixes( char word[] ){
     char pre[len+1];
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
     
-
     for(i = 0; i < len; i++){
         pre[i] = word[i];
         pre[i+1] = '\0';
@@ -218,16 +207,10 @@ void incrementPrefixes( char word[] ){
             j->second++;
         }else{
             char * copy = new char[len+1];
-
-            // copy = "test";
             strcpy(copy,pre);
-            // if( strcmp(copy,c) == 0 ) cout << "same" << endl;
-            // const char * p = pre;
-            // cout << "[" << copy << "]" << endl;
             prefixes[copy] = 1;
         }
     }
-    // exit(1);
 }
 
 //also erases prefixes who's count has reached 0
@@ -259,13 +242,11 @@ void buildDict( char dictFile[] )
     word = strtok(buffer,"\n\t");
     while (word != NULL) {
         len = strlen( word );
-        if( len >= 1 ){ //per Boggle rules
-            incrementPrefixes( word );
+        if( len >= 3 ){ //per Boggle rules
             dict[word] = true;
-            // prefixes[word] = 1;
-            // cout << word << endl;
-            // exit(1);
+
             //track how many times each segment of a word appears in the dictionary
+            incrementPrefixes( word );
         }
         
         word = strtok (NULL, "\n\t");
@@ -349,14 +330,9 @@ int main(int argc, char* argv[]){
     board = buildBoard( boggleFile );
     board_size = strlen( board );
     cols = sqrt( board_size );
-    children[0] = -1-cols;
-    children[1] = -cols;
-    children[2] = 1-cols;
-    children[3] = -1;
-    children[4] = 1;
-    children[5] = cols-1;
-    children[6] = cols;
-    children[7] = cols+1;
+    int arr[] = {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
+    children = arr;
+
     buildDict( dictFile );
 
     cout    << "================================================" << endl
