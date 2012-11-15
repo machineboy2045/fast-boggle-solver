@@ -220,15 +220,14 @@ void incrementPrefixes( char word[] ){
 
 //also erases prefixes who's count has reached 0
 inline void decrementPrefixes( const char * word ){
-    int len = WSIZE, i;
-    char pre[len+1];
+    int len = strlen(word), i;
+    string pre;
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
 
     for(i = 0; i < len; i++){
-        pre[i] = word[i];
-        pre[i+1] = '\0';
+        pre += word[i];
 
-        j = dict.find(pre);
+        j = dict.find(pre.c_str());
         if( j != dict.end() ){
             if( j->second > 0 ) --j->second;
             if( j->second == 0 ) dict.erase( j );
@@ -258,21 +257,20 @@ void buildDict( char dictFile[] )
         word = strtok (NULL, "\n\t");
     }
 }
-inline void find(int node, char str[], vector<bool> searched, int depth){
+inline void find(int node, string str, vector<bool> searched, int depth){
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
     
     ++checkedNodes;
     searched[node] = true;
     // if( depth == WSIZE ) return;
 
-    str[depth] = board[node];
+    str += board[node];
     if( 'q' == board[node]){ 
-        str[depth+1] = 'u';
+        str += 'u';
         ++depth;
     }
-    str[depth+1] = '\0';
 
-    p = dict.find( str );
+    p = dict.find( str.c_str() );
     if( p == dict.end() ) return; 
     if( p->second <= -8 ){
         if( -16 == p->second ){ 
@@ -296,7 +294,7 @@ inline void find(int node, char str[], vector<bool> searched, int depth){
 }
 
 void findWords(){
-    char str[WSIZE];
+    string str;
     vector<bool> searched;
     for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
@@ -322,7 +320,7 @@ int main(int argc, char* argv[]){
     // prefixes.set_empty_key(NULL);
     // words.set_empty_key(NULL);
 
-    char boggleFile[] = "boggle.txt";
+    char boggleFile[] = "boggle_easy.txt";
     char dictFile[] = "mydictionary.txt";
     char resultsFile[] = "results.txt";
 
