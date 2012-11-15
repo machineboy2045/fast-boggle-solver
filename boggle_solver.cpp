@@ -4,6 +4,7 @@
 #include <time.h>
 #include <string.h>
 #include <sparsehash/dense_hash_map>
+// #include <boost/array.hpp>
 #include <vector>
 #include <map>
 
@@ -198,7 +199,7 @@ void printWords( FILE * file ){
 }
 
 void incrementPrefixes( char word[] ){
-    int len = strlen(word), i;
+    int len = WSIZE, i;
     char pre[len+1];
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
     
@@ -218,8 +219,8 @@ void incrementPrefixes( char word[] ){
 }
 
 //also erases prefixes who's count has reached 0
-void decrementPrefixes( const char * word ){
-    int len = strlen(word), i;
+inline void decrementPrefixes( const char * word ){
+    int len = WSIZE, i;
     char pre[len+1];
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
 
@@ -229,7 +230,7 @@ void decrementPrefixes( const char * word ){
 
         j = dict.find(pre);
         if( j != dict.end() ){
-            if( j->second > 0 ) j->second--;
+            if( j->second > 0 ) --j->second;
             if( j->second == 0 ) dict.erase( j );
         }
     }
@@ -257,44 +258,46 @@ void buildDict( char dictFile[] )
         word = strtok (NULL, "\n\t");
     }
 }
-void find(int node, char str[], vector<bool> searched, int depth){
+inline void find(int node, char str[], vector<bool> searched, int depth){
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
     
-    checkedNodes++;
+    ++checkedNodes;
     searched[node] = true;
-    if( depth == WSIZE -2 ) return;
+    // if( depth == WSIZE ) return;
 
     str[depth] = board[node];
-    if(board[node] == 'q'){ 
+    if( 'q' == board[node]){ 
         str[depth+1] = 'u';
-        depth++;
+        ++depth;
     }
     str[depth+1] = '\0';
 
     p = dict.find( str );
     if( p == dict.end() ) return; 
     if( p->second <= -8 ){
-        if( p->second == -16 ){ 
+        if( -16 == p->second ){ 
             duplicates++;
         }else{
             p->second = -16;
-            wordsFound++;
+            ++wordsFound;
             decrementPrefixes( p->first ); //only decrement if this is the first occurance
         }
     }
 
     int j = 0;
     while( j < 8 ){
-        int child = node + children[j++];
+        int child = node + children[j];
+        int d = depth + 1;
         if((board[child] != '*') && !searched[child]){ //faster to check here
-            find(child, str, searched, depth+1); //tail recursion transformed to loop by compiler
+            find(child, str, searched, d); //tail recursion transformed to loop by compiler
         }
+        ++j;
     }
 }
 
 void findWords(){
     char str[WSIZE];
-    vector <bool> searched;
+    vector<bool> searched;
     for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
         if(board[i] != '*'){
@@ -319,7 +322,7 @@ int main(int argc, char* argv[]){
     // prefixes.set_empty_key(NULL);
     // words.set_empty_key(NULL);
 
-    char boggleFile[] = "boggle_easy.txt";
+    char boggleFile[] = "boggle.txt";
     char dictFile[] = "mydictionary.txt";
     char resultsFile[] = "results.txt";
 
@@ -341,7 +344,7 @@ int main(int argc, char* argv[]){
     
     begin = clock();
     findWords();
-    double end = (clock() - begin) / CLOCKS_PER_SEC;
+    double end = double(clock() - begin) / CLOCKS_PER_SEC;
 
     cout    << wordsFound << " words found in "
             << end  << " seconds" << endl
