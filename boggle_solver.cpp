@@ -24,7 +24,7 @@ clock_t begin; //used to time search duration
 char * board;
 int board_size;
 int cols;
-// int * searched;
+int * SEARCHED;
 int * children;
 
 
@@ -144,11 +144,10 @@ void * buildBoard( char boggleFile[] ){
     char * buffer = readF( boggleFile );
     int len = strlen( buffer );
     cols = sqrt( len ) + 2;
-    int arr[] = {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
-    children = arr;
+    children = new int[NUM_BRANCHES] {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
     board_size = cols * cols;
     board = new char[board_size+1];
-    // searched = new int[board_size * NUM_BRANCHES * WSIZE]; //word size = max depth, neighbors = branches
+    // SEARCHED = new int[board_size * NUM_BRANCHES * WSIZE]; //word size = max depth, neighbors = branches
 
     //add border
     int j = 0;
@@ -270,7 +269,10 @@ inline void find(int node, char str[], vector<bool> searched, int len){
     if( 'q' == board[node]){ 
         str[len++] = 'u';
     }
-    str[len+1] = '\0';
+    str[len] = '\0';
+
+    // cout << board[node] << endl;
+    // cout << str << endl;
 
     p = dict.find( str );
     if( p == dict.end() ) return; 
@@ -287,8 +289,9 @@ inline void find(int node, char str[], vector<bool> searched, int len){
     int j = 0;
     while( j < NUM_BRANCHES ){
         int child = node + children[j];
-    // if( checkedNodes > 2286192 ) return;
         ++j;
+
+    // if( checkedNodes > 2286192 ) return;
         if((board[child] != '*') && !searched[child]){ //faster to check here
             find(child, str, searched, len); //tail recursion transformed to loop by compiler
         }
@@ -299,7 +302,7 @@ inline void find(int node, char str[], vector<bool> searched, int len){
 void findWords(){
     char str[WSIZE+1];
     vector<bool> searched;
-    for(int i = 0; i < board_size; i++) searched.push_back(false);
+    // for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
         if(board[i] != '*'){
             find(i, str, searched, 0);
@@ -321,7 +324,7 @@ int main(int argc, char* argv[]){
     dict.set_empty_key(NULL);
     dict.set_deleted_key("!");
 
-    char boggleFile[] = "boggle.txt";
+    char boggleFile[] = "boggle_easy.txt";
     char dictFile[] = "mydictionary.txt";
     char resultsFile[] = "results.txt";
 
