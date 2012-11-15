@@ -15,6 +15,8 @@ const int num_neighbors = 8;
 const int WSIZE = 20; //longest word read in dictionary
 
 int duplicates = 0;
+int wordsFound = 0;
+int wordsParsed = 0;
 int checkedNodes = 0;
 char longestWord[WSIZE];
 clock_t begin; //used to time search duration
@@ -101,9 +103,9 @@ typedef struct{
 } MurmurHash;
 
 
-dense_hash_map <const char*, bool, MurmurHash, eqstr>  dict;
-dense_hash_map <const char*, int, MurmurHash, eqstr> prefixes;
-dense_hash_map <const char*, bool, MurmurHash, eqstr> words; //found words
+dense_hash_map <const char*, int, MurmurHash, eqstr>  dict;
+// dense_hash_map <const char*, int, MurmurHash, eqstr> prefixes;
+// dense_hash_map <const char*, bool, MurmurHash, eqstr> words; //found words
 
 
 char* readF( char fname[] ){
@@ -177,11 +179,13 @@ void printboard( FILE * file ){
 }
 
 void printWords( FILE * file ){    
-    dense_hash_map<const char*, bool, MurmurHash, eqstr>::iterator p;
+    dense_hash_map<const char*, int, MurmurHash, eqstr>::iterator p;
     map<const char*, bool, ltstr>::iterator m;
-    for(p = words.begin(); p != words.end(); p++) {
-        if( strlen(longestWord) < strlen(p->first) ) strcpy(longestWord, p->first);
-        sorted[p->first] = true;
+    for(p = dict.begin(); p != dict.end(); p++) {
+        if( p->second == -16 ){
+            if( strlen(longestWord) < strlen(p->first) ) strcpy(longestWord, p->first);
+            sorted[p->first] = true;
+        }
     }
 
     //alphabetized
@@ -202,13 +206,13 @@ void incrementPrefixes( char word[] ){
         pre[i] = word[i];
         pre[i+1] = '\0';
 
-        j = prefixes.find(pre);
-        if( j != prefixes.end() ){
-            j->second++;
+        j = dict.find(pre);
+        if( j != dict.end() ){
+            if( j->second >= 0 ) j->second++; // -8 is complete word
         }else{
             char * copy = new char[len+1];
             strcpy(copy,pre);
-            prefixes[copy] = 1;
+            dict[copy] = 1;
         }
     }
 }
@@ -223,10 +227,10 @@ void decrementPrefixes( const char * word ){
         pre[i] = word[i];
         pre[i+1] = '\0';
 
-        j = prefixes.find(pre);
-        if( j != prefixes.end() ){
-            j->second--;
-            if( j->second <= 0 ) prefixes.erase( j );
+        j = dict.find(pre);
+        if( j != dict.end() ){
+            if( j->second > 0 ) j->second--;
+            if( j->second == 0 ) dict.erase( j );
         }
     }
 }
@@ -243,7 +247,8 @@ void buildDict( char dictFile[] )
     while (word != NULL) {
         len = strlen( word );
         if( len >= 3 ){ //per Boggle rules
-            dict[word] = true;
+            dict[word] = -8;
+            wordsParsed++;
 
             //track how many times each segment of a word appears in the dictionary
             incrementPrefixes( word );
@@ -253,8 +258,7 @@ void buildDict( char dictFile[] )
     }
 }
 void find(int node, char str[], vector<bool> searched, int depth){
-    dense_hash_map<const char*,bool, MurmurHash, eqstr>::iterator p;
-    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator q;
+    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
     
     checkedNodes++;
     searched[node] = true;
@@ -267,15 +271,15 @@ void find(int node, char str[], vector<bool> searched, int depth){
     }
     str[depth+1] = '\0';
 
-    q = prefixes.find(str);
-    if( q == prefixes.end() ) return; 
     p = dict.find( str );
-    if( p != dict.end() ){ 
-        if( words.find(str) != words.end() ){ 
+    if( p == dict.end() ) return; 
+    if( p->second <= -8 ){
+        if( p->second == -16 ){ 
             duplicates++;
         }else{
-            decrementPrefixes( q->first ); //only decrement if this is the first occurance
-            words[p->first] = true;
+            p->second = -16;
+            wordsFound++;
+            decrementPrefixes( p->first ); //only decrement if this is the first occurance
         }
     }
 
@@ -299,17 +303,11 @@ void findWords(){
     }
 }
 
-void saveResults(){
+void saveResults( char fname[] ){
     FILE * file;
-
-    char fname[] = "results.txt";
-    file = fopen ("mylog.txt","a");
+    file = fopen (fname,"w");
     printboard( file );
     printWords( file );
-    cout    << "\"" << longestWord << "\" was the longest word found (" << strlen(longestWord) << " characters)" << endl
-            << "Results saved to " << fname << endl
-            << "================================================" << endl << endl;
-
     fclose(file);
 }
 
@@ -317,12 +315,13 @@ void saveResults(){
 
 int main(int argc, char* argv[]){
     dict.set_empty_key(NULL);
-    prefixes.set_empty_key(NULL);
-    prefixes.set_deleted_key("!");
-    words.set_empty_key(NULL);
+    dict.set_deleted_key("!");
+    // prefixes.set_empty_key(NULL);
+    // words.set_empty_key(NULL);
 
     char boggleFile[] = "boggle_easy.txt";
     char dictFile[] = "mydictionary.txt";
+    char resultsFile[] = "results.txt";
 
     // if( argc > 1 ) boggleFile = argv[1];
     // if( argc > 2 ) dictFile = argv[2];
@@ -333,19 +332,25 @@ int main(int argc, char* argv[]){
     int arr[] = {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
     children = arr;
 
+    cout    << "================================================" << endl;
+
     buildDict( dictFile );
 
-    cout    << "================================================" << endl
-            << dict.size() << " words parsed in " << dictFile << endl
-            << "Word length limit of " << WSIZE << " characters" << endl;
+    cout    << wordsParsed << " words parsed in " << dictFile << endl;
+    cout    << "Word length limit of " << WSIZE << " characters" << endl;
     
     begin = clock();
     findWords();
+    double end = (clock() - begin) / CLOCKS_PER_SEC;
 
-    cout    << words.size() << " words found in "
-            << double(clock() - begin) / CLOCKS_PER_SEC << " seconds" << endl
+    cout    << wordsFound << " words found in "
+            << end  << " seconds" << endl
             << checkedNodes << " nodes checked " << endl
             << duplicates << " duplicate words found" << endl;
 
-    saveResults();
+    saveResults( resultsFile);
+
+    cout    << "\"" << longestWord << "\" was the longest word found (" << strlen(longestWord) << " characters)" << endl
+            << "Results saved to " << resultsFile << endl
+            << "================================================" << endl << endl;
 }
