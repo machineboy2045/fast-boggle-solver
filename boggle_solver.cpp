@@ -226,7 +226,7 @@ inline void decrementPrefixes( const char * word ){
 
     for(i = 0; word[i]; i++){
         pre[i] = word[i];
-        pre[i+1] = '\0'; 
+        pre[i+1] = '\0';
 
         j = dict.find(pre);
         if( j != dict.end() ){
