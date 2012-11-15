@@ -12,7 +12,7 @@ using namespace std;
 using google::dense_hash_map;      // namespace where class lives by default
 
 
-const int num_neighbors = 8;
+const int NUM_BRANCHES = 8;
 const int WSIZE = 20; //longest word read in dictionary
 
 int duplicates = 0;
@@ -24,7 +24,8 @@ clock_t begin; //used to time search duration
 char * board;
 int board_size;
 int cols;
-int *children;
+// int * searched;
+int * children;
 
 
 struct ltstr
@@ -139,16 +140,19 @@ char* readF( char fname[] ){
     return buffer;
 }
 
-char* buildBoard( char boggleFile[] ){
+void * buildBoard( char boggleFile[] ){
     char * buffer = readF( boggleFile );
     int len = strlen( buffer );
-    int cols = sqrt( len ) + 2;
-    int size = cols * cols;
-    char* board = new char[size+1];
-    int j = 0;
+    cols = sqrt( len ) + 2;
+    int arr[] = {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
+    children = arr;
+    board_size = cols * cols;
+    board = new char[board_size+1];
+    // searched = new int[board_size * NUM_BRANCHES * WSIZE]; //word size = max depth, neighbors = branches
 
     //add border
-    for(int i = 0; i < size; i++){
+    int j = 0;
+    for(int i = 0; i < board_size; i++){
         if( (i < cols) ||           //top
         ((i+1) % cols == 0) ||      //right
         (i > cols * (cols -1)) ||   //bot
@@ -158,16 +162,13 @@ char* buildBoard( char boggleFile[] ){
             board[i] = buffer[j];
             j++;
         }
-        board[i+1] = '\0';
     }
-    return board;
+    board[board_size+1] = '\0';
 }   
 
 void printboard( FILE * file ){
-    int len = strlen(board);
-    int cols = sqrt( len );
     char str[] = "  ";
-    for(int i = 0; i < len; i++){
+    for(int i = 0; i < board_size; i++){
         str[0] = board[i];
         if( board[i] == 'q' ){ 
             fputs("Qu",file);
@@ -199,11 +200,11 @@ void printWords( FILE * file ){
 }
 
 void incrementPrefixes( char word[] ){
-    int len = WSIZE, i;
-    char pre[len+1];
+    int len = WSIZE+1, i;
+    char pre[len];
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
     
-    for(i = 0; i < len; i++){
+    for(i = 0; word[i]; i++){
         pre[i] = word[i];
         pre[i+1] = '\0';
 
@@ -211,7 +212,7 @@ void incrementPrefixes( char word[] ){
         if( j != dict.end() ){
             if( j->second >= 0 ) j->second++; // -8 is complete word
         }else{
-            char * copy = new char[len+1];
+            char * copy = new char[len];
             strcpy(copy,pre);
             dict[copy] = 1;
         }
@@ -220,16 +221,17 @@ void incrementPrefixes( char word[] ){
 
 //also erases prefixes who's count has reached 0
 inline void decrementPrefixes( const char * word ){
-    int len = strlen(word), i;
-    string pre;
+    int len = WSIZE+1, i;
+    char pre[len];
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
 
-    for(i = 0; i < len; i++){
-        pre += word[i];
+    for(i = 0; word[i]; i++){
+        pre[i] = word[i];
+        pre[i+1] = '\0';
 
-        j = dict.find(pre.c_str());
+        j = dict.find(pre);
         if( j != dict.end() ){
-            if( j->second > 0 ) --j->second;
+            if( j->second > 0 ) j->second--;
             if( j->second == 0 ) dict.erase( j );
         }
     }
@@ -257,24 +259,24 @@ void buildDict( char dictFile[] )
         word = strtok (NULL, "\n\t");
     }
 }
-inline void find(int node, string str, vector<bool> searched, int depth){
+inline void find(int node, char str[], vector<bool> searched, int len){
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
     
     ++checkedNodes;
     searched[node] = true;
-    // if( depth == WSIZE ) return;
+    if( len == WSIZE ) return;
 
-    str += board[node];
+    str[len++] = board[node];
     if( 'q' == board[node]){ 
-        str += 'u';
-        ++depth;
+        str[len++] = 'u';
     }
+    str[len+1] = '\0';
 
-    p = dict.find( str.c_str() );
+    p = dict.find( str );
     if( p == dict.end() ) return; 
     if( p->second <= -8 ){
         if( -16 == p->second ){ 
-            duplicates++;
+            ++duplicates;
         }else{
             p->second = -16;
             ++wordsFound;
@@ -283,18 +285,19 @@ inline void find(int node, string str, vector<bool> searched, int depth){
     }
 
     int j = 0;
-    while( j < 8 ){
+    while( j < NUM_BRANCHES ){
         int child = node + children[j];
-        int d = depth + 1;
-        if((board[child] != '*') && !searched[child]){ //faster to check here
-            find(child, str, searched, d); //tail recursion transformed to loop by compiler
-        }
+    // if( checkedNodes > 2286192 ) return;
         ++j;
+        if((board[child] != '*') && !searched[child]){ //faster to check here
+            find(child, str, searched, len); //tail recursion transformed to loop by compiler
+        }
+        
     }
 }
 
 void findWords(){
-    string str;
+    char str[WSIZE+1];
     vector<bool> searched;
     for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
@@ -317,21 +320,15 @@ void saveResults( char fname[] ){
 int main(int argc, char* argv[]){
     dict.set_empty_key(NULL);
     dict.set_deleted_key("!");
-    // prefixes.set_empty_key(NULL);
-    // words.set_empty_key(NULL);
 
-    char boggleFile[] = "boggle_easy.txt";
+    char boggleFile[] = "boggle.txt";
     char dictFile[] = "mydictionary.txt";
     char resultsFile[] = "results.txt";
 
     // if( argc > 1 ) boggleFile = argv[1];
     // if( argc > 2 ) dictFile = argv[2];
 
-    board = buildBoard( boggleFile );
-    board_size = strlen( board );
-    cols = sqrt( board_size );
-    int arr[] = {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
-    children = arr;
+    buildBoard( boggleFile );
 
     cout    << "================================================" << endl;
 
