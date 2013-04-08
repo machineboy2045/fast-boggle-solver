@@ -4,7 +4,6 @@
 #include <time.h>
 #include <string.h>
 #include <sparsehash/dense_hash_map>
-// #include <boost/array.hpp>
 #include <vector>
 #include <map>
 
@@ -265,7 +264,8 @@ void buildDict( char dictFile[] )
 }
 
 void statusBar(int i){
-    if( (cols-2) < 100 ) return;
+    if( (cols-2) < 100 ) 
+        return;
     // int increment = double(1) / puzzle_size * 100; //number of bars for each 1%
     i += 1; //compensate for array index
     if( i - progress == onePercentage ){
@@ -275,7 +275,7 @@ void statusBar(int i){
     if( i == puzzle_size ) cout << " done!" << endl;
 }
 
-inline bool lookupWord(const char * str){
+inline bool inDictionary(const char * str){
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
 
     p = dict.find( str );
@@ -307,8 +307,9 @@ inline void find(int node, char str[], vector<bool> searched, int len){
 
     appendCube( str, board[node], len);
 
-    if(!lookupWord( str )) 
+    if(!inDictionary( str )) 
         return;
+
     searched[node] = true;
 
     if( len+1 == WSIZE )
@@ -359,14 +360,14 @@ int main(int argc, char* argv[]){
     dict.set_empty_key(NULL);
     dict.set_deleted_key("!");
 
-
-
     char boggleFile[100] = "boggle.txt";
     char dictFile[100] = "mydictionary.txt";
     char resultsFile[100] = "results.txt";
 
-    if( argc > 1 ) strcpy(boggleFile, argv[1]);
-    if( argc > 2 ) strcpy(dictFile, argv[2]);
+    if( argc > 1 ) 
+        strcpy(boggleFile, argv[1]);
+    if( argc > 2 ) 
+        strcpy(dictFile, argv[2]);
 
     buildBoard( boggleFile );
 
