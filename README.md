@@ -15,27 +15,23 @@ Dependencies
 ------------
 You will need to download Google's SparseHash. Kudos to Google for an amazingly fast hashtable. Much faster than the C++ STL.
 
+Also thanks to Austin Appleby for MurmurHash function.
+
 Environment
 -----------
 This was written on Debian 64bit.
 
 Compiling & Running
 -------------------
-When compiling with GCC, use the -O3 optimization flag for maximum performance!
+When compiling with G++, use the -O3 optimization flag for maximum performance!
 
 The important files
 -------------------
 boggle_generator.cpp
-Generates the boggle puzzle. Optionally pecify a puzzle width (4, 100, etc) when running from the command line.
+Generates the boggle puzzle. Optionally specify a puzzle width (4, 100, etc) when running from the command line.
 
 boggle_solver.cpp
 Run this after generating a puzzle. The found words will be saved to results.txt.
 
 mydictionary.txt 
-~178,000 words. 
-
-Other notes
------------
-I apologize for how messy this repo is. I plan to clean it up in the future.
-
-
+~178,000 words.

@@ -6,12 +6,29 @@
 #include <sparsehash/dense_hash_map>
 #include <vector>
 #include <map>
+#include <locale>
 
 using namespace std;
 using google::dense_hash_map;      // namespace where class lives by default
 
 
 const int NUM_BRANCHES = 8;
+
+/*
+The words & prefixes in the dictionary each have an int value.
+
+-8 = A whole word, as opposed to a prefix
+-16 = A whole word that has been found on the board
+0+ = A prefix. Prefixes have positive values indicating how many times they occur in the whole
+words of the dictionary. These values are decremented each time a whole word containing
+that prefix is found. For instance if all the words begining with 'dist' are found,
+the prefix 'dist' would have a value of 0 and would be removed from the dictionary.
+
+*/
+const int WHOLE_WORD = -8; 
+const int FOUND_WORD = -16; 
+
+
 const int WSIZE = 20; //longest word read in dictionary
 
 int duplicates = 0;
@@ -48,7 +65,7 @@ struct eqstr
   }
 };
 
-
+//MurmuHash by Austin Appleby
 typedef struct{
   inline unsigned int operator() (const char * key) const {
     int seed = 95032;
@@ -187,7 +204,7 @@ void printWords( FILE * file ){
     dense_hash_map<const char*, int, MurmurHash, eqstr>::iterator p;
     map<const char*, bool, ltstr>::iterator m;
     for(p = dict.begin(); p != dict.end(); p++) {
-        if( p->second == -16 ){
+        if( p->second == FOUND_WORD ){
             if( strlen(longestWord) < strlen(p->first) ) strcpy(longestWord, p->first);
             sorted[p->first] = true;
         }
@@ -202,6 +219,14 @@ void printWords( FILE * file ){
     
 }
 
+// Chech that this is a prefix not a WHOLE_WORD or FOUND_WORD which are < 0
+bool isPrefix( int x ){
+    return( x > 0 );
+}
+
+//splits word into all possible prefixes
+//"AND" becomes "A", "AN", "AND"
+//keeps count of how many times a prefix occurs
 void incrementPrefixes( char word[] ){
     int len = WSIZE+1, i;
     char pre[len];
@@ -212,8 +237,12 @@ void incrementPrefixes( char word[] ){
         pre[i+1] = '\0';
 
         j = dict.find(pre);
+
+        //if this prefix is already in the dictionary
+        //increment the count
         if( j != dict.end() ){
-            if( j->second >= 0 ) j->second++; // -8 is complete word
+            if( isPrefix(j->second) ) j->second++; 
+        //otherwise, the count = 1
         }else{
             char * copy = new char[len];
             strcpy(copy,pre);
@@ -246,16 +275,14 @@ void buildDict( char dictFile[] )
     char * buffer = readF( dictFile );
     char * word;
     int len, i;
-    // printf("boggle_easy: %s\n", buffer);
 
     word = strtok(buffer,"\n\t");
     while (word != NULL) {
         len = strlen( word );
         if( len >= 3 ){ //per Boggle rules
-            dict[word] = -8;
+            dict[word] = WHOLE_WORD;
             wordsParsed++;
 
-            //track how many times each segment of a word appears in the dictionary
             incrementPrefixes( word );
         }
         
@@ -275,17 +302,19 @@ void statusBar(int i){
     if( i == puzzle_size ) cout << " done!" << endl;
 }
 
+//returns true if found
+//also keeps track of which words have been found
 inline bool inDictionary(const char * str){
     dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
 
     p = dict.find( str );
     if( p == dict.end() ) return false; 
 
-    if( p->second <= -8 ){
-        if( -16 == p->second ){ 
+    if( !isPrefix(p->second) ){
+        if( FOUND_WORD == p->second ){ 
             ++duplicates;
         }else{
-            p->second = -16;
+            p->second = FOUND_WORD;
             ++wordsFound;
             decrementPrefixes( p->first ); //only decrement if this is the first occurance
         }
@@ -312,8 +341,8 @@ inline void find(int node, char str[], vector<bool> searched, int len){
 
     searched[node] = true;
 
-    if( len+1 == WSIZE )
-        return;
+    // if( len+1 == WSIZE ) //did not see any performance gain by checking this
+    //     return;
 
     int j = 0;
     while( j < NUM_BRANCHES ){
@@ -357,6 +386,9 @@ void saveResults( char fname[] ){
 
 
 int main(int argc, char* argv[]){
+    cout.imbue(std::locale("")); //for comma seperated numbers
+
+
     dict.set_empty_key(NULL);
     dict.set_deleted_key("!");
 
@@ -377,17 +409,20 @@ int main(int argc, char* argv[]){
 
     cout    << wordsParsed << " words parsed in " << dictFile << endl;
     cout    << "Word length limit of " << WSIZE << " characters" << endl;
-    cout    << dict.size() << " word fragments in dictionary" << endl;
+    // cout    << dict.size() << " word fragments in dictionary" << endl;
     cout    << puzzle_size << " cubes on the board" << endl;
     
     begin = clock();
     findWords();
     double end = double(clock() - begin) / CLOCKS_PER_SEC;
+    double speed = 0;
+    if( end )
+        speed = floor((checkedNodes/end)/1000);
 
     cout    << wordsFound << " words found in "
             << end  << " seconds" << endl
-            << dict.size() << " word fragments remaining" << endl
-            << checkedNodes << " nodes checked " << endl
+            // << dict.size() << " word fragments remaining" << endl
+            << "~" << speed << " cubes checked per millisecond" << endl
             << duplicates << " duplicate words found" << endl;
 
     saveResults( resultsFile);
