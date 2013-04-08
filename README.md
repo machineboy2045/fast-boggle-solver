@@ -33,3 +33,9 @@ Run this after generating a puzzle. The found words will be saved to results.txt
 
 mydictionary.txt -> 
 ~178,000 words.
+
+Final thoughts
+--------------
+I found that the solver slows down as the puzzle size increases. I don't just mean it takes longer overall, I mean the
+time required per node in the depth-first-search actually increases. I'm not sure if it's a bug in my code, a hardware limitation,
+or the nature of this problem. If anyone has an answer please email me at willandmeling@gmail.com
