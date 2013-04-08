@@ -25,13 +25,11 @@ Compiling & Running
 -------------------
 When compiling with G++, use the -O3 optimization flag for maximum performance!
 
-The important files
--------------------
-boggle_generator.cpp
+boggle_generator.cpp -> 
 Generates the boggle puzzle. Optionally specify a puzzle width (4, 100, etc) when running from the command line.
 
-boggle_solver.cpp
+boggle_solver.cpp -> 
 Run this after generating a puzzle. The found words will be saved to results.txt.
 
-mydictionary.txt 
+mydictionary.txt -> 
 ~178,000 words.
