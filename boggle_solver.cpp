@@ -19,10 +19,13 @@ int duplicates = 0;
 int wordsFound = 0;
 int wordsParsed = 0;
 int checkedNodes = 0;
+int progress = 0;
+int onePercentage;
 char longestWord[WSIZE];
 clock_t begin; //used to time search duration
 char * board;
 int board_size;
+int puzzle_size;
 int cols;
 int * SEARCHED;
 int * children;
@@ -146,6 +149,8 @@ void * buildBoard( char boggleFile[] ){
     cols = sqrt( len ) + 2;
     children = new int[NUM_BRANCHES] {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
     board_size = cols * cols;
+    puzzle_size = (cols-2) * (cols-2);
+    onePercentage = double(1) / 100 * puzzle_size;
     board = new char[board_size+1];
     // SEARCHED = new int[board_size * NUM_BRANCHES * WSIZE]; //word size = max depth, neighbors = branches
 
@@ -258,24 +263,24 @@ void buildDict( char dictFile[] )
         word = strtok (NULL, "\n\t");
     }
 }
-inline void find(int node, char str[], vector<bool> searched, int len){
-    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
-    
-    ++checkedNodes;
-    searched[node] = true;
-    if( len == WSIZE ) return;
 
-    str[len++] = board[node];
-    if( 'q' == board[node]){ 
-        str[len++] = 'u';
+void statusBar(int i){
+    if( (cols-2) < 100 ) return;
+    // int increment = double(1) / puzzle_size * 100; //number of bars for each 1%
+    i += 1; //compensate for array index
+    if( i - progress == onePercentage ){
+        cout << "|" << flush;
+        progress += onePercentage;
     }
-    str[len] = '\0';
+    if( i == puzzle_size ) cout << " done!" << endl;
+}
 
-    // cout << board[node] << endl;
-    // cout << str << endl;
+inline bool lookupWord(const char * str){
+    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
 
     p = dict.find( str );
-    if( p == dict.end() ) return; 
+    if( p == dict.end() ) return false; 
+
     if( p->second <= -8 ){
         if( -16 == p->second ){ 
             ++duplicates;
@@ -285,14 +290,31 @@ inline void find(int node, char str[], vector<bool> searched, int len){
             decrementPrefixes( p->first ); //only decrement if this is the first occurance
         }
     }
+    return true;
+}
+
+inline void appendCube(char * str, char c, int &len){
+    str[len++] = c;
+    if( 'q' == c){ 
+        str[len++] = 'u';
+    }
+    str[len] = '\0';
+}
+
+inline void find(int node, char str[], vector<bool> searched, int len){
+    
+    ++checkedNodes;
+
+    appendCube( str, board[node], len);
+
+    if(!lookupWord( str )) return;
+    searched[node] = true;
 
     int j = 0;
     while( j < NUM_BRANCHES ){
         int child = node + children[j];
         ++j;
-
-    // if( checkedNodes > 2286192 ) return;
-        if((board[child] != '*') && !searched[child]){ //faster to check here
+        if((board[child] != '*') && !searched[child]){ //faster to check here            
             find(child, str, searched, len); //tail recursion transformed to loop by compiler
         }
         
@@ -302,10 +324,20 @@ inline void find(int node, char str[], vector<bool> searched, int len){
 void findWords(){
     char str[WSIZE+1];
     vector<bool> searched;
+    int j = 0;
+
+    for(int i = 0; i < 100; i++){
+        cout << ".";
+    }
+    cout << " 100%" << endl;
+
+
     for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
         if(board[i] != '*'){
             find(i, str, searched, 0);
+            statusBar(j);
+            ++j;
         }
     }
 }
@@ -319,17 +351,18 @@ void saveResults( char fname[] ){
 }
 
 
-
 int main(int argc, char* argv[]){
     dict.set_empty_key(NULL);
     dict.set_deleted_key("!");
 
-    char boggleFile[] = "boggle_easy.txt";
-    char dictFile[] = "mydictionary.txt";
-    char resultsFile[] = "results.txt";
 
-    // if( argc > 1 ) boggleFile = argv[1];
-    // if( argc > 2 ) dictFile = argv[2];
+
+    char boggleFile[100] = "boggle.txt";
+    char dictFile[100] = "mydictionary.txt";
+    char resultsFile[100] = "results.txt";
+
+    if( argc > 1 ) strcpy(boggleFile, argv[1]);
+    if( argc > 2 ) strcpy(dictFile, argv[2]);
 
     buildBoard( boggleFile );
 
@@ -339,6 +372,8 @@ int main(int argc, char* argv[]){
 
     cout    << wordsParsed << " words parsed in " << dictFile << endl;
     cout    << "Word length limit of " << WSIZE << " characters" << endl;
+    cout    << dict.size() << " word fragments in dictionary" << endl;
+    cout    << puzzle_size << " cubes on the board" << endl;
     
     begin = clock();
     findWords();
@@ -346,6 +381,7 @@ int main(int argc, char* argv[]){
 
     cout    << wordsFound << " words found in "
             << end  << " seconds" << endl
+            << dict.size() << " word fragments remaining" << endl
             << checkedNodes << " nodes checked " << endl
             << duplicates << " duplicate words found" << endl;
 
