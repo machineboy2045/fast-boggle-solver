@@ -307,8 +307,12 @@ inline void find(int node, char str[], vector<bool> searched, int len){
 
     appendCube( str, board[node], len);
 
-    if(!lookupWord( str )) return;
+    if(!lookupWord( str )) 
+        return;
     searched[node] = true;
+
+    if( len+1 == WSIZE )
+        return;
 
     int j = 0;
     while( j < NUM_BRANCHES ){
