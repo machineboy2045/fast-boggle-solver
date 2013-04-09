@@ -336,22 +336,18 @@ inline void find(int node, char str[], vector<bool> searched, int len){
 
     appendCube( str, board[node], len);
 
-    if(!inDictionary( str )) 
-        return;
+    if( inDictionary( str ) ){
 
-    searched[node] = true;
+        searched[node] = true;
 
-    // if( len+1 == WSIZE ) //did not see any performance gain by checking this
-    //     return;
+        // if( len+1 == WSIZE ) //did not see any performance gain by checking this
+        //     return;
 
-    int j = 0;
-    while( j < NUM_BRANCHES ){
-        int child = node + children[j];
-        ++j;
-        if((board[child] != '*') && !searched[child]){ //faster to check here            
-            find(child, str, searched, len); //tail recursion transformed to loop by compiler
+        for(int i = 0; i < NUM_BRANCHES; i++){
+            int child = node + children[i];
+            if((board[child] != '*') && !searched[child]) //faster to check here            
+                find(child, str, searched, len);
         }
-        
     }
 }
 
@@ -422,7 +418,8 @@ int main(int argc, char* argv[]){
     cout    << wordsFound << " words found in "
             << end  << " seconds" << endl
             // << dict.size() << " word fragments remaining" << endl
-            << "~" << speed << " cubes checked per millisecond" << endl
+            << (checkedNodes/puzzle_size) << " nodes checked per cube" << endl
+            << "~" << speed << " nodes checked per millisecond" << endl
             << duplicates << " duplicate words found" << endl;
 
     saveResults( resultsFile);
