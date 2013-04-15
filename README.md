@@ -3,11 +3,11 @@ C++ Fast Boggle Solver
 
 Benchmarks
 -------------
-CPU: Pentium SU2700 1.3GHz
-RAM: 3gb
+CPU: Pentium SU2700 1.3GHz  
+RAM: 3gb  
 
-Loads dictionary of 178,590 words in < 1 second.
-Solves 100x100 Boggle (boggle.txt) in 4.87 seconds.
+Loads dictionary of 178,590 words in < 1 second.  
+Solves 100x100 Boggle (boggle.txt) in 4.87 seconds.  
 Solving a 4x4 Boggle is too fast to provide a meaningful benchmark. :)
 
 
