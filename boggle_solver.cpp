@@ -1,133 +1,69 @@
 #include <iostream>
 #include <stdlib.h>
+#include <algorithm>
+#include <stdio.h>
 #include <math.h>
 #include <time.h>
 #include <string.h>
-#include <sparsehash/dense_hash_map>
 #include <vector>
-#include <map>
 #include <locale>
 
 using namespace std;
-using google::dense_hash_map;      // namespace where class lives by default
-
 
 const int NUM_BRANCHES = 8;
+const int ALPHA_SIZE = 26; //number of letters in our alphabet
+const int WSIZE = 20; //longest word read in dictionary
+const int BORDER = 26; //designates the value of edge cubes
 
 /*
-The words & prefixes in the dictionary each have an int value.
+Dict is a tree (trie?).
 
--8 = A whole word, as opposed to a prefix
--16 = A whole word that has been found on the board
-0+ = A prefix. Prefixes have positive values indicating how many times they occur in the whole
-words of the dictionary. These values are decremented each time a whole word containing
-that prefix is found. For instance if all the words begining with 'dist' are found,
-the prefix 'dist' would have a value of 0 and would be removed from the dictionary.
+For any prefix, it can tell you which letters
+follow it and how many suffixes (children) it has.
+
+Lets say you have a two letter prefix "AN".
+If you want to know what letters could follow this prefix,
+you would look at dict['A']->children['N']->children.
 
 */
-const int WHOLE_WORD = -8; 
-const int FOUND_WORD = -16; 
+
+class Node{
+    public:
+        Node* children[ALPHA_SIZE]; 
+        int count; //number of suffixes that share this as a root
+        char* word;
+        bool found; //has this word been found?
+
+        Node();
+};
+
+Node::Node(){
+    count = 0;
+    word = NULL;
+    found = false;
+    int i;
+    for(i = 0; i < ALPHA_SIZE; i++){
+        children[i] = NULL;
+    }
+}
 
 
-const int WSIZE = 20; //longest word read in dictionary
+Node* dict;
 
 int duplicates = 0;
-int wordsFound = 0;
 int wordsParsed = 0;
 int checkedNodes = 0;
 int progress = 0;
 int onePercentage;
-char longestWord[WSIZE];
+char longestWord[WSIZE+1];
 clock_t begin; //used to time search duration
-char * board;
+int * board;
 int board_size;
 int puzzle_size;
 int cols;
 int * SEARCHED;
 int * children;
-
-
-struct ltstr
-{
-  bool operator()(const char* s1, const char* s2) const
-  {
-    return strcmp(s1, s2) < 0;
-  }
-};
-
-map<const char*,bool,ltstr> sorted;
-
-struct eqstr
-{
-  bool operator()(const char* s1, const char* s2) const
-  {
-    return (s1 == s2) || (s1 && s2 && strcmp(s1, s2) == 0);
-  }
-};
-
-//MurmuHash by Austin Appleby
-typedef struct{
-  inline unsigned int operator() (const char * key) const {
-    int seed = 95032;
-    int len = strlen( key );
-
-    // 'm' and 'r' are mixing constants generated offline.
-    // They're not really 'magic', they just happen to work well.
-
-    const unsigned int m = 0x5bd1e995;
-    const int r = 24;
-
-    // Initialize the hash to a 'random' value
-
-    unsigned int h = seed ^ len;
-
-    // Mix 4 bytes at a time into the hash
-
-    const unsigned char * data = (const unsigned char *)key;
-
-    while(len >= 4)
-    {
-        unsigned int k = *(unsigned int *)data;
-
-        k *= m; 
-        k ^= k >> r; 
-        k *= m; 
-        
-        h *= m; 
-        h ^= k;
-
-        data += 4;
-        len -= 4;
-    }
-    
-    // Handle the last few bytes of the input array
-
-    switch(len)
-    {
-    case 3: h ^= data[2] << 16;
-    case 2: h ^= data[1] << 8;
-    case 1: h ^= data[0];
-            h *= m;
-    };
-
-    // Do a few final mixes of the hash to ensure the last few
-    // bytes are well-incorporated.
-
-    h ^= h >> 13;
-    h *= m;
-    h ^= h >> 15;
-
-    return h;
-
-
-  }
-} MurmurHash;
-
-
-dense_hash_map <const char*, int, MurmurHash, eqstr>  dict;
-// dense_hash_map <const char*, int, MurmurHash, eqstr> prefixes;
-// dense_hash_map <const char*, bool, MurmurHash, eqstr> words; //found words
-
+vector<char*> found;
 
 char* readF( char fname[] ){
     FILE * pFile;
@@ -167,7 +103,7 @@ void * buildBoard( char boggleFile[] ){
     board_size = cols * cols;
     puzzle_size = (cols-2) * (cols-2);
     onePercentage = double(1) / 100 * puzzle_size;
-    board = new char[board_size+1];
+    board = new int[board_size];
     // SEARCHED = new int[board_size * NUM_BRANCHES * WSIZE]; //word size = max depth, neighbors = branches
 
     //add border
@@ -177,96 +113,74 @@ void * buildBoard( char boggleFile[] ){
         ((i+1) % cols == 0) ||      //right
         (i > cols * (cols -1)) ||   //bot
         (i % cols == 0) ){             //left
-            board[i] = '*';
+            board[i] = BORDER;
         }else{
-            board[i] = buffer[j];
+            board[i] = buffer[j] - 'a';
             j++;
         }
     }
-    board[board_size+1] = '\0';
 }   
 
 void printboard( FILE * file ){
-    char str[] = "  ";
+    char c;
     for(int i = 0; i < board_size; i++){
-        str[0] = board[i];
-        if( board[i] == 'q' ){ 
+        c = (char) (board[i] + 'a');
+        if( 'q' == c ){ 
             fputs("Qu",file);
+        }else if( BORDER == board[i] ){
+            fputs("* ",file);
         }else{
-            fputs(str,file);
+            fputc(c,file);
+            fputs(" ",file);
         }
         if( (i+1) % cols == 0 ) fputs("\n",file);     
     }
     fputs("\n",file);
 }
 
+void getFoundWords(Node* p){
+    int i;
+
+    if( p ){
+        if( p->found )
+            found.push_back( p->word );
+
+        for(i = 0; i < ALPHA_SIZE; i++){
+            getFoundWords( p->children[i] );
+        }
+    }
+}
+
 void printWords( FILE * file ){    
-    dense_hash_map<const char*, int, MurmurHash, eqstr>::iterator p;
-    map<const char*, bool, ltstr>::iterator m;
-    for(p = dict.begin(); p != dict.end(); p++) {
-        if( p->second == FOUND_WORD ){
-            if( strlen(longestWord) < strlen(p->first) ) strcpy(longestWord, p->first);
-            sorted[p->first] = true;
-        }
-    }
+    sort(found.begin(), found.end());
 
-    //alphabetized
-    for(m = sorted.begin(); m != sorted.end(); m++) {
-        fputs (m->first,file);
-        fputs ("\n",file);
+    for(vector<char*>::iterator it = found.begin(); it != found.end(); ++it) {
+            fputs (*it,file);
+            fputs ("\n",file);
     }
-
-    
 }
 
-// Chech that this is a prefix not a WHOLE_WORD or FOUND_WORD which are < 0
-bool isPrefix( int x ){
-    return( x > 0 );
-}
 
-//splits word into all possible prefixes
-//"AND" becomes "A", "AN", "AND"
-//keeps count of how many times a prefix occurs
-void incrementPrefixes( char word[] ){
-    int len = WSIZE+1, i;
-    char pre[len];
-    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
+void insertWord( char word[], const int len ){
+    Node* p = dict;
+    int i;
     
     for(i = 0; word[i]; i++){
-        pre[i] = word[i];
-        pre[i+1] = '\0';
+        int letter = word[i] - 'a'; //convert characters to ints: a=0 z=25 
+        
+        //combine 'qu' into single cube represented by 'q'
+        if( ('q' == word[i]) && ('u' == word[i+1]) )
+            i++;
+        
+        p->count++;
 
-        j = dict.find(pre);
+        if( !p->children[letter] )
+            p->children[letter] = new Node;
 
-        //if this prefix is already in the dictionary
-        //increment the count
-        if( j != dict.end() ){
-            if( isPrefix(j->second) ) j->second++; 
-        //otherwise, the count = 1
-        }else{
-            char * copy = new char[len];
-            strcpy(copy,pre);
-            dict[copy] = 1;
-        }
+        p = p->children[letter];
     }
-}
 
-//also erases prefixes who's count has reached 0
-inline void decrementPrefixes( const char * word ){
-    int len = WSIZE+1, i;
-    char pre[len];
-    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator j;
-
-    for(i = 0; word[i]; i++){
-        pre[i] = word[i];
-        pre[i+1] = '\0';
-
-        j = dict.find(pre);
-        if( j != dict.end() ){
-            if( j->second > 0 ) j->second--;
-            if( j->second == 0 ) dict.erase( j );
-        }
-    }
+    p->word = word;
 }
 
 // load dictionary into hash table
@@ -276,14 +190,14 @@ void buildDict( char dictFile[] )
     char * word;
     int len, i;
 
+    dict = new Node;
+
     word = strtok(buffer,"\n\t");
     while (word != NULL) {
         len = strlen( word );
         if( len >= 3 ){ //per Boggle rules
-            dict[word] = WHOLE_WORD;
+            insertWord( word, len );
             wordsParsed++;
-
-            incrementPrefixes( word );
         }
         
         word = strtok (NULL, "\n\t");
@@ -304,68 +218,53 @@ void statusBar(int i){
 
 //returns true if found
 //also keeps track of which words have been found
-inline bool inDictionary(const char * str){
-    dense_hash_map<const char*,int, MurmurHash, eqstr>::iterator p;
-
-    p = dict.find( str );
-    if( p == dict.end() ) return false; 
-
-    if( !isPrefix(p->second) ){
-        if( FOUND_WORD == p->second ){ 
-            ++duplicates;
+inline Node* lookup(const int letter, Node* p, int &foundNewWord){
+    p = p->children[letter];
+    if( p && p->word ){
+        if( p->found ){
+            duplicates++;
         }else{
-            p->second = FOUND_WORD;
-            ++wordsFound;
-            decrementPrefixes( p->first ); //only decrement if this is the first occurance
+            p->found = true;
+            foundNewWord = 1;
         }
     }
-    return true;
+
+    return p;
 }
 
-inline void appendCube(char * str, char c, int &len){
-    str[len++] = c;
-    if( 'q' == c){ 
-        str[len++] = 'u';
-    }
-    str[len] = '\0';
-}
+inline int find(int cubeIndex, Node* p, vector<bool> searched){
+    int foundNewWord = 0; //does this node complete a word that hasn't been found?
+    int wordsFromChildren = 0;
 
-inline void find(int node, char str[], vector<bool> searched, int len){
-    
     ++checkedNodes;
 
-    appendCube( str, board[node], len);
+    p = lookup( board[cubeIndex], p, foundNewWord);
 
-    if( inDictionary( str ) ){
+    if( p && p->count ){
 
-        searched[node] = true;
-
-        // if( len+1 == WSIZE ) //did not see any performance gain by checking this
-        //     return;
+        searched[cubeIndex] = true;
 
         for(int i = 0; i < NUM_BRANCHES; i++){
-            int child = node + children[i];
-            if((board[child] != '*') && !searched[child]) //faster to check here            
-                find(child, str, searched, len);
+            int child = cubeIndex + children[i];
+            if((board[child] != BORDER) && !searched[child]) //faster to check here            
+                wordsFromChildren += find(child, p, searched);
         }
+
+        p->count = p->count - wordsFromChildren;
     }
+
+    return wordsFromChildren - foundNewWord;
 }
 
 void findWords(){
-    char str[WSIZE+1];
+    Node* p = dict;
     vector<bool> searched;
-    int j = 0;
-
-    for(int i = 0; i < 100; i++){
-        cout << ".";
-    }
-    cout << " 100%" << endl;
-
+    int i, j = 0;
 
     for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
-        if(board[i] != '*'){
-            find(i, str, searched, 0);
+        if(board[i] != BORDER){
+            find(i, p, searched);
             statusBar(j);
             ++j;
         }
@@ -382,15 +281,11 @@ void saveResults( char fname[] ){
 
 
 int main(int argc, char* argv[]){
-    cout.imbue(std::locale("")); //for comma seperated numbers
-
-
-    dict.set_empty_key(NULL);
-    dict.set_deleted_key("!");
-
     char boggleFile[100] = "boggle.txt";
     char dictFile[100] = "mydictionary.txt";
     char resultsFile[100] = "results.txt";
+    
+    cout.imbue(std::locale("")); //for comma seperated numbers
 
     if( argc > 1 ) 
         strcpy(boggleFile, argv[1]);
@@ -405,17 +300,23 @@ int main(int argc, char* argv[]){
 
     cout    << wordsParsed << " words parsed in " << dictFile << endl;
     cout    << "Word length limit of " << WSIZE << " characters" << endl;
-    // cout    << dict.size() << " word fragments in dictionary" << endl;
     cout    << puzzle_size << " cubes on the board" << endl;
-    
+
+    for(int i = 0; i < 100; i++){
+        cout << ".";
+    }
+    cout << " 100%" << endl;
+
     begin = clock();
+
     findWords();
+    getFoundWords( dict );
     double end = double(clock() - begin) / CLOCKS_PER_SEC;
     double speed = 0;
     if( end )
         speed = floor((checkedNodes/end)/1000);
 
-    cout    << wordsFound << " words found in "
+    cout    << found.size() << " words found in "
             << end  << " seconds" << endl
             // << dict.size() << " word fragments remaining" << endl
             << (checkedNodes/puzzle_size) << " nodes checked per cube" << endl
@@ -424,7 +325,6 @@ int main(int argc, char* argv[]){
 
     saveResults( resultsFile);
 
-    cout    << "\"" << longestWord << "\" was the longest word found (" << strlen(longestWord) << " characters)" << endl
-            << "Results saved to " << resultsFile << endl
-            << "================================================" << endl << endl;
+    cout    << "Results saved to " << resultsFile << endl;
+    cout    << "================================================" << endl << endl;
 }
