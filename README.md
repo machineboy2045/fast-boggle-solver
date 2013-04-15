@@ -1,29 +1,35 @@
-Fast Boggle Solver
+C++ Fast Boggle Solver
 ==================
 
 Benchmarks
 -------------
-The solver is written in C++. It uses Google's SparseHash hashtable implementation. Loading a dictionary of ~178,000 words is almost instant. Solving a 4x4 boggle is so trivial that there is no meaningful time measurement for it. So I tried it on various sizes. 100x100 boggle takes 6.79 seconds on my single core laptop.
+CPU: Pentium SU2700 1.3GHz
+RAM: 3gb
+
+Loads dictionary of 178,590 words in < 1 second.
+Solves 100x100 Boggle (boggle.txt) in 4.87 seconds.
+Solving a 4x4 Boggle is too fast to provide a meaningful benchmark. :)
+
 
 How it Works
 ------------
-I break the dictionary words into prefixes and store them in a hash table so look-up is O(1). "AND" becomes "A", "AN", "AND". I do a depth first search using the prefix dictionary to determine at each step if the string I'm building is part of a word.
+The dictionary is loaded into a trie (prefix tree). 
 
-The only optimization I'm using is that I record if a prefix has been used up. That is, I've found every word containing that prefix. For instance all words beginning with "a" (doesn't happen) or "dist" (might happen). This way I can abort searching when I come across a depleted prefix.
+Everything is stored as INTS: 'a'=0, 'z'=25. 
 
-Dependencies
-------------
-You will need to download Google's SparseHash. Kudos to Google for an amazingly fast hashtable. Much faster than the C++ STL.
+'q' cubes are treated as 'qu' per Boggle rules.
 
-Also thanks to Austin Appleby for MurmurHash function.
+The board is stored in a 1 dimensional array of INTS. 
 
-Environment
------------
-This was written on Debian 64bit.
+The puzzle is traversed using a depth first search.
 
-Compiling & Running
--------------------
-When compiling with G++, use the -O3 optimization flag for maximum performance!
+As we traverse we check if the prefix we are building is valid. Lookup time in our trie is ~O(1).
+
+The trie keeps count of how many words are children of each prefix. If we find all the words starting with "begi", that prefix will have a count of 0. The next time we come across "begi" we will know there's no point in searching further since we've found all possible words in that branch.
+
+Running
+-------
+The binaries are compiled in Debian 64bit. 
 
 boggle_generator -> 
 Generates the boggle puzzle. Optionally specify a puzzle width (4, 100, etc) when running from the command line.
@@ -31,11 +37,13 @@ Generates the boggle puzzle. Optionally specify a puzzle width (4, 100, etc) whe
 boggle_solver -> 
 Run this after generating a puzzle. The found words will be saved to results.txt.
 
-mydictionary.txt -> 
-~178,000 words.
+Compiling
+---------
+When compiling with G++ use the -O3 optimization flag for maximum performance!
 
 Final thoughts
 --------------
-I found that the solver slows down as the puzzle size increases. I don't just mean it takes longer overall, I mean the
-time required per node in the depth-first-search actually increases. I'm not sure if it's a bug in my code, a hardware limitation,
-or the nature of this problem. If anyone has an answer please email me at willandmeling@gmail.com
+Earlier versions used Google's Sparse Hash. The trie implementation is 1.3x faster. The dictionary loading is also faster.
+
+I found that the solver slows down as the puzzle size increases. It doesn't just take more time overall, the time required per node in the depth-first-search actually increases. I'm not sure if it's a bug in my code, a hardware limitation,
+or the nature of this problem. If you have an idea why I'd love to hear it! -> willandmeling@gmail.com

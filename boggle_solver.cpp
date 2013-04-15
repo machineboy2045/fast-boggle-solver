@@ -10,7 +10,7 @@
 
 using namespace std;
 
-const int NUM_BRANCHES = 8;
+const int NUM_BRANCHES = 8; //max number of neighboring cubes
 const int ALPHA_SIZE = 26; //number of letters in our alphabet
 const int WSIZE = 20; //longest word read in dictionary
 const int BORDER = 26; //designates the value of edge cubes
@@ -27,17 +27,17 @@ you would look at dict['A']->children['N']->children.
 
 */
 
-class Node{
+class Trie{
     public:
-        Node* children[ALPHA_SIZE]; 
+        Trie* children[ALPHA_SIZE]; 
         int count; //number of suffixes that share this as a root
         char* word;
         bool found; //has this word been found?
 
-        Node();
+        Trie();
 };
 
-Node::Node(){
+Trie::Trie(){
     count = 0;
     word = NULL;
     found = false;
@@ -48,7 +48,7 @@ Node::Node(){
 }
 
 
-Node* dict;
+Trie* dict;
 
 int duplicates = 0;
 int wordsParsed = 0;
@@ -104,7 +104,6 @@ void * buildBoard( char boggleFile[] ){
     puzzle_size = (cols-2) * (cols-2);
     onePercentage = double(1) / 100 * puzzle_size;
     board = new int[board_size];
-    // SEARCHED = new int[board_size * NUM_BRANCHES * WSIZE]; //word size = max depth, neighbors = branches
 
     //add border
     int j = 0;
@@ -138,7 +137,8 @@ void printboard( FILE * file ){
     fputs("\n",file);
 }
 
-void getFoundWords(Node* p){
+//traverse the trie and push all found words into vector 'found'
+void getFoundWords(Trie* p){
     int i;
 
     if( p ){
@@ -162,7 +162,7 @@ void printWords( FILE * file ){
 
 
 void insertWord( char word[], const int len ){
-    Node* p = dict;
+    Trie* p = dict;
     int i;
     
     for(i = 0; word[i]; i++){
@@ -175,7 +175,7 @@ void insertWord( char word[], const int len ){
         p->count++;
 
         if( !p->children[letter] )
-            p->children[letter] = new Node;
+            p->children[letter] = new Trie;
 
         p = p->children[letter];
     }
@@ -184,13 +184,13 @@ void insertWord( char word[], const int len ){
 }
 
 // load dictionary into hash table
-void buildDict( char dictFile[] )
+void buildTrie( char dictFile[] )
 {
     char * buffer = readF( dictFile );
     char * word;
     int len, i;
 
-    dict = new Node;
+    dict = new Trie;
 
     word = strtok(buffer,"\n\t");
     while (word != NULL) {
@@ -218,7 +218,7 @@ void statusBar(int i){
 
 //returns true if found
 //also keeps track of which words have been found
-inline Node* lookup(const int letter, Node* p, int &foundNewWord){
+inline Trie* lookup(const int letter, Trie* p, int &foundNewWord){
     p = p->children[letter];
     if( p && p->word ){
         if( p->found ){
@@ -232,8 +232,8 @@ inline Node* lookup(const int letter, Node* p, int &foundNewWord){
     return p;
 }
 
-inline int find(int cubeIndex, Node* p, vector<bool> searched){
-    int foundNewWord = 0; //does this node complete a word that hasn't been found?
+inline int recursiveSearch(int cubeIndex, Trie* p, vector<bool> searched){
+    int foundNewWord = 0; //does this Trie complete a word that hasn't been found?
     int wordsFromChildren = 0;
 
     ++checkedNodes;
@@ -247,7 +247,7 @@ inline int find(int cubeIndex, Node* p, vector<bool> searched){
         for(int i = 0; i < NUM_BRANCHES; i++){
             int child = cubeIndex + children[i];
             if((board[child] != BORDER) && !searched[child]) //faster to check here            
-                wordsFromChildren += find(child, p, searched);
+                wordsFromChildren += recursiveSearch(child, p, searched);
         }
 
         p->count = p->count - wordsFromChildren;
@@ -256,15 +256,15 @@ inline int find(int cubeIndex, Node* p, vector<bool> searched){
     return wordsFromChildren - foundNewWord;
 }
 
-void findWords(){
-    Node* p = dict;
+void traverseBoard(){
+    Trie* p = dict;
     vector<bool> searched;
     int i, j = 0;
 
     for(int i = 0; i < board_size; i++) searched.push_back(false);
     for(int i = 0; i < board_size; i++){
         if(board[i] != BORDER){
-            find(i, p, searched);
+            recursiveSearch(i, p, searched);
             statusBar(j);
             ++j;
         }
@@ -296,7 +296,7 @@ int main(int argc, char* argv[]){
 
     cout    << "================================================" << endl;
 
-    buildDict( dictFile );
+    buildTrie( dictFile );
 
     cout    << wordsParsed << " words parsed in " << dictFile << endl;
     cout    << "Word length limit of " << WSIZE << " characters" << endl;
@@ -309,7 +309,7 @@ int main(int argc, char* argv[]){
 
     begin = clock();
 
-    findWords();
+    traverseBoard();
     getFoundWords( dict );
     double end = double(clock() - begin) / CLOCKS_PER_SEC;
     double speed = 0;
