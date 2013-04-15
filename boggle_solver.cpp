@@ -1,3 +1,27 @@
+/*
+FAST C++ BOGGLE SOLVER 
+Copyright 2012 Will Jensen
+
+https://github.com/themachineswillwin/fast-boggle-solver
+
+willandmeling@gmail.com
+
+This file is part of Fast C++ Boggle Solver.
+
+Fast C++ Boggle Solver is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Fast C++ Boggle Solver is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Fast C++ Boggle Solver.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <iostream>
 #include <stdlib.h>
 #include <algorithm>
@@ -13,7 +37,7 @@ using namespace std;
 const int NUM_BRANCHES = 8; //max number of neighboring cubes
 const int ALPHA_SIZE = 26; //number of letters in our alphabet
 const int WSIZE = 20; //longest word read in dictionary
-const int BORDER = 26; //designates the value of edge cubes
+const int BORDER = ALPHA_SIZE; //surrounds the Boggle puzzle. Should be 1 > than last int in alphabet
 
 /*
 Dict is a tree (trie?).
@@ -31,7 +55,7 @@ class Trie{
     public:
         Trie* children[ALPHA_SIZE]; 
         int count; //number of suffixes that share this as a root
-        char* word;
+        char* word; //if this node completes a word, store it here
         bool found; //has this word been found?
 
         Trie();
@@ -95,8 +119,68 @@ char* readF( char fname[] ){
     return buffer;
 }
 
+void saveResults( char fname[] ){
+    FILE * file;
+    file = fopen (fname,"w");
+
+    //pretty print the board
+    char c;
+    for(int i = 0; i < board_size; i++){
+        c = (char) (board[i] + 'a');
+        if( 'q' == c ){ 
+            fputs("Qu",file);
+        }else if( BORDER == board[i] ){
+            fputs("* ",file);
+        }else{
+            fputc(c,file);
+            fputs(" ",file);
+        }
+        if( (i+1) % cols == 0 ) fputs("\n",file);     
+    }
+    fputs("\n",file);
+
+    //print found words list
+    sort(found.begin(), found.end());
+
+    for(vector<char*>::iterator it = found.begin(); it != found.end(); ++it) {
+            fputs (*it,file);
+            fputs ("\n",file);
+    }
+
+    fclose(file);
+}
+
+void statusBar(int i){
+    if( (cols-2) < 100 ) 
+        return;
+    i += 1; //compensate for array index
+    if( i - progress == onePercentage ){
+        cout << "|" << flush;
+        progress += onePercentage;
+    }
+    if( i == puzzle_size ) cout << " done!" << endl;
+}
+
+//after searching the board...
+//traverse the trie and push all found words into vector 'found'
+//Recursive!
+void getFoundWords(Trie* p){
+    int i;
+
+    if( p ){
+        if( p->found )
+            found.push_back( p->word );
+
+        for(i = 0; i < ALPHA_SIZE; i++){
+            getFoundWords( p->children[i] );
+        }
+    }
+}
+
 void * buildBoard( char boggleFile[] ){
     char * buffer = readF( boggleFile );
+
+    //calculate the dimensions
     int len = strlen( buffer );
     cols = sqrt( len ) + 2;
     children = new int[NUM_BRANCHES] {-1-cols, -cols, 1-cols, -1, 1, cols-1, cols, cols+1};
@@ -120,47 +204,7 @@ void * buildBoard( char boggleFile[] ){
     }
 }   
 
-void printboard( FILE * file ){
-    char c;
-    for(int i = 0; i < board_size; i++){
-        c = (char) (board[i] + 'a');
-        if( 'q' == c ){ 
-            fputs("Qu",file);
-        }else if( BORDER == board[i] ){
-            fputs("* ",file);
-        }else{
-            fputc(c,file);
-            fputs(" ",file);
-        }
-        if( (i+1) % cols == 0 ) fputs("\n",file);     
-    }
-    fputs("\n",file);
-}
-
-//traverse the trie and push all found words into vector 'found'
-void getFoundWords(Trie* p){
-    int i;
-
-    if( p ){
-        if( p->found )
-            found.push_back( p->word );
-
-        for(i = 0; i < ALPHA_SIZE; i++){
-            getFoundWords( p->children[i] );
-        }
-    }
-}
-
-void printWords( FILE * file ){    
-    sort(found.begin(), found.end());
-
-    for(vector<char*>::iterator it = found.begin(); it != found.end(); ++it) {
-            fputs (*it,file);
-            fputs ("\n",file);
-    }
-}
-
-
+//add word to Trie
 void insertWord( char word[], const int len ){
     Trie* p = dict;
     int i;
@@ -172,7 +216,7 @@ void insertWord( char word[], const int len ){
         if( ('q' == word[i]) && ('u' == word[i+1]) )
             i++;
         
-        p->count++;
+        p->count++; //track how many words use this prefix
 
         if( !p->children[letter] )
             p->children[letter] = new Trie;
@@ -180,10 +224,10 @@ void insertWord( char word[], const int len ){
         p = p->children[letter];
     }
 
-    p->word = word;
+    p->word = word; //the last node completes the word, save it here
 }
 
-// load dictionary into hash table
+// load dictionary into trie
 void buildTrie( char dictFile[] )
 {
     char * buffer = readF( dictFile );
@@ -204,22 +248,10 @@ void buildTrie( char dictFile[] )
     }
 }
 
-void statusBar(int i){
-    if( (cols-2) < 100 ) 
-        return;
-    // int increment = double(1) / puzzle_size * 100; //number of bars for each 1%
-    i += 1; //compensate for array index
-    if( i - progress == onePercentage ){
-        cout << "|" << flush;
-        progress += onePercentage;
-    }
-    if( i == puzzle_size ) cout << " done!" << endl;
-}
-
-//returns true if found
-//also keeps track of which words have been found
-inline Trie* lookup(const int letter, Trie* p, int &foundNewWord){
-    p = p->children[letter];
+//returns a Trie* to the next prefix or NULL
+//keeps track of which words have been found
+inline Trie* lookup(const int i, Trie* p, int &foundNewWord){
+    p = p->children[i];
     if( p && p->word ){
         if( p->found ){
             duplicates++;
@@ -232,52 +264,53 @@ inline Trie* lookup(const int letter, Trie* p, int &foundNewWord){
     return p;
 }
 
-inline int recursiveSearch(int cubeIndex, Trie* p, vector<bool> searched){
-    int foundNewWord = 0; //does this Trie complete a word that hasn't been found?
+//depth first search. recursive!
+//returns the number of NEW words found in children + self
+//Words that have already been found do not count
+inline int descend(int cubeIndex, Trie* p, vector<bool> searched){
+    int foundNewWord = 0; //does this node complete a word that has NOT been found already?
     int wordsFromChildren = 0;
 
     ++checkedNodes;
 
     p = lookup( board[cubeIndex], p, foundNewWord);
 
-    if( p && p->count ){
+    if( p && p->count ){ //is this a valid prefix? Are there any remaining words that use it?
 
-        searched[cubeIndex] = true;
+        searched[cubeIndex] = true; //mark this cube as used
 
-        for(int i = 0; i < NUM_BRANCHES; i++){
+        for(int i = 0; i < NUM_BRANCHES; i++){ //descend to each neighboring cube
             int child = cubeIndex + children[i];
             if((board[child] != BORDER) && !searched[child]) //faster to check here            
-                wordsFromChildren += recursiveSearch(child, p, searched);
+                wordsFromChildren += descend(child, p, searched);
         }
 
-        p->count = p->count - wordsFromChildren;
+        p->count = p->count - wordsFromChildren; //decrement how many words are left that use this prefix
     }
 
-    return wordsFromChildren - foundNewWord;
+    return wordsFromChildren + foundNewWord;
 }
 
+
+
+//for each cube on the board, perform a depth first search using descend()
 void traverseBoard(){
     Trie* p = dict;
-    vector<bool> searched;
+    vector<bool> searched; //cubes should be used only once per word
     int i, j = 0;
 
+    //initialize searched to false for all cubes on the board
     for(int i = 0; i < board_size; i++) searched.push_back(false);
-    for(int i = 0; i < board_size; i++){
+
+    for(int i = 0; i < board_size; i++){ //for each cube
         if(board[i] != BORDER){
-            recursiveSearch(i, p, searched);
+            descend(i, p, searched); //DFS
             statusBar(j);
             ++j;
         }
     }
 }
 
-void saveResults( char fname[] ){
-    FILE * file;
-    file = fopen (fname,"w");
-    printboard( file );
-    printWords( file );
-    fclose(file);
-}
 
 
 int main(int argc, char* argv[]){
@@ -285,7 +318,7 @@ int main(int argc, char* argv[]){
     char dictFile[100] = "mydictionary.txt";
     char resultsFile[100] = "results.txt";
     
-    cout.imbue(std::locale("")); //for comma seperated numbers
+    cout.imbue(std::locale("")); //adds commas to large numbers
 
     if( argc > 1 ) 
         strcpy(boggleFile, argv[1]);
@@ -311,6 +344,7 @@ int main(int argc, char* argv[]){
 
     traverseBoard();
     getFoundWords( dict );
+
     double end = double(clock() - begin) / CLOCKS_PER_SEC;
     double speed = 0;
     if( end )
@@ -318,7 +352,6 @@ int main(int argc, char* argv[]){
 
     cout    << found.size() << " words found in "
             << end  << " seconds" << endl
-            // << dict.size() << " word fragments remaining" << endl
             << (checkedNodes/puzzle_size) << " nodes checked per cube" << endl
             << "~" << speed << " nodes checked per millisecond" << endl
             << duplicates << " duplicate words found" << endl;
