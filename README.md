@@ -13,19 +13,15 @@ Solving a 4x4 Boggle is too fast to provide a meaningful benchmark. :)
 
 How it Works
 ------------
-The dictionary is loaded into a trie (prefix tree). 
+The solver uses acustom tree structure. I'm not sure it can be considered a trie but it's similar. 
 
-Everything is stored as INTS: 'a'=0, 'z'=25. 
-
-'q' cubes are treated as 'qu' per Boggle rules.
-
-The board is stored in a 1 dimensional array of INTS. 
-
-The puzzle is traversed using a depth first search.
-
-As we traverse we check if the prefix we are building is valid. Lookup time in our trie is ~O(1).
-
-The trie keeps count of how many words are children of each prefix. If we find all the words starting with "begi", that prefix will have a count of 0. The next time we come across "begi" we will know there's no point in searching further since we've found all possible words in that branch.
+Each node has 26 branches, 1 for each letter of the alphabet.   
+I traverse the branches of the boggle board in parallel with the branches of my dictionary.  
+If the branch does not exist in the dictionary, I stop searching it on the Boggle board.  
+I convert all the letters on the board to ints. So 'A' = 0.  
+Since it's just arrays, lookup is always O(1).  
+Each node stores if it completes a word and how many words exist in its children.  
+The tree is pruned as words are found to reduce repeatedly searching for the same words. I believe pruning is also O(1).
 
 Running
 -------
