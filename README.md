@@ -13,7 +13,7 @@ Solving a 4x4 Boggle is too fast to provide a meaningful benchmark. :)
 
 How it Works
 ------------
-The solver uses acustom tree structure. I'm not sure it can be considered a trie but it's similar. 
+The solver uses a custom tree structure. I'm not sure it can be considered a trie but it's similar. 
 
 Each node has 26 branches, 1 for each letter of the alphabet.   
 I traverse the branches of the boggle board in parallel with the branches of my dictionary.  
