@@ -6,7 +6,7 @@ Benchmarks
 CPU: Pentium SU2700 1.3GHz  
 RAM: 3gb  
 
-Loads dictionary of 178,590 words in < 1 second.  
+Loads dictionary of 178,590 words from file into a tree in < 1 second.  
 Solves 100x100 Boggle (boggle.txt) in 4 seconds. A board that size usually contains ~44,000 words.  
 Solving a 4x4 Boggle is too fast to provide a meaningful benchmark. :)
 
