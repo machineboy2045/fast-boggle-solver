@@ -42,4 +42,4 @@ Final thoughts
 Earlier versions used Google's Sparse Hash. The trie implementation is 1.3x faster. The dictionary loading is also faster.
 
 I found that the solver slows down as the puzzle size increases. It doesn't just take more time overall, the time required per node in the depth-first-search actually increases. I'm not sure if it's a bug in my code, a hardware limitation,
-or the nature of this problem. If you have an idea why I'd love to hear it! -> willandmeling@gmail.com
+or the nature of this problem. If you have an idea why I'd love to hear it! -> machineboy2045@gmail.com
