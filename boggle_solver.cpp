@@ -1,10 +1,10 @@
 /*
-FAST C++ BOGGLE SOLVER 
+FAST C++ BOGGLE SOLVER
 Copyright 2012 Will Jensen
 
 https://github.com/themachineswillwin/fast-boggle-solver
 
-willandmeling@gmail.com
+machineboy2045@gmail.com
 
 This file is part of Fast C++ Boggle Solver.
 
@@ -53,7 +53,8 @@ you would look at dict['A']->children['N']->children.
 
 class Trie{
     public:
-        Trie* children[ALPHA_SIZE]; 
+        Trie* children[ALPHA_SIZE];
+        Trie* parent;
         int count; //number of suffixes that share this as a root
         char* word; //if this node completes a word, store it here
         bool found; //has this word been found?
@@ -127,7 +128,7 @@ void saveResults( char fname[] ){
     char c;
     for(int i = 0; i < board_size; i++){
         c = (char) (board[i] + 'a');
-        if( 'q' == c ){ 
+        if( 'q' == c ){
             fputs("Qu",file);
         }else if( BORDER == board[i] ){
             fputs("* ",file);
@@ -135,7 +136,7 @@ void saveResults( char fname[] ){
             fputc(c,file);
             fputs(" ",file);
         }
-        if( (i+1) % cols == 0 ) fputs("\n",file);     
+        if( (i+1) % cols == 0 ) fputs("\n",file);
     }
     fputs("\n",file);
 
@@ -151,7 +152,7 @@ void saveResults( char fname[] ){
 }
 
 void statusBar(int i){
-    if( (cols-2) < 100 ) 
+    if( (cols-2) < 100 )
         return;
     i += 1; //compensate for array index
     if( i - progress == onePercentage ){
@@ -202,24 +203,26 @@ void * buildBoard( char boggleFile[] ){
             j++;
         }
     }
-}   
+}
 
 //add word to Trie
 void insertWord( char word[], const int len ){
     Trie* p = dict;
     int i;
-    
+
     for(i = 0; word[i]; i++){
-        int letter = word[i] - 'a'; //convert characters to ints: a=0 z=25 
-        
+        int letter = word[i] - 'a'; //convert characters to ints: a=0 z=25
+
         //combine 'qu' into single cube represented by 'q'
         if( ('q' == word[i]) && ('u' == word[i+1]) )
             i++;
-        
+
         p->count++; //track how many words use this prefix
 
         if( !p->children[letter] )
             p->children[letter] = new Trie;
+
+        p->children[letter]->parent = p;
 
         p = p->children[letter];
     }
@@ -243,21 +246,21 @@ void buildTrie( char dictFile[] )
             insertWord( word, len );
             wordsParsed++;
         }
-        
+
         word = strtok (NULL, "\n\t");
     }
 }
 
 //returns a Trie* to the next prefix or NULL
 //keeps track of which words have been found
-inline Trie* lookup(const int i, Trie* p, int &foundNewWord){
+inline Trie* lookup(const int i, Trie* p){
     p = p->children[i];
     if( p && p->word ){
         if( p->found ){
             duplicates++;
         }else{
             p->found = true;
-            foundNewWord = 1;
+            p->parent->count--; //decrement how many words are left that use this prefix
         }
     }
 
@@ -267,13 +270,10 @@ inline Trie* lookup(const int i, Trie* p, int &foundNewWord){
 //depth first search. recursive!
 //returns the number of NEW words found in children + self
 //Words that have already been found do not count
-inline int descend(int cubeIndex, Trie* p, vector<bool> searched){
-    int foundNewWord = 0; //does this node complete a word that has NOT been found already?
-    int wordsFromChildren = 0;
-
+inline bool descend(int cubeIndex, Trie* p, vector<bool> searched){
     ++checkedNodes;
 
-    p = lookup( board[cubeIndex], p, foundNewWord);
+    p = lookup( board[cubeIndex], p);
 
     if( p && p->count ){ //is this a valid prefix? Are there any remaining words that use it?
 
@@ -281,14 +281,10 @@ inline int descend(int cubeIndex, Trie* p, vector<bool> searched){
 
         for(int i = 0; i < NUM_BRANCHES; i++){ //descend to each neighboring cube
             int child = cubeIndex + children[i];
-            if((board[child] != BORDER) && !searched[child]) //faster to check here            
-                wordsFromChildren += descend(child, p, searched);
+            if((board[child] != BORDER) && !searched[child]) //faster to check here
+                descend(child, p, searched);
         }
-
-        p->count = p->count - wordsFromChildren; //decrement how many words are left that use this prefix
     }
-
-    return wordsFromChildren + foundNewWord;
 }
 
 
@@ -317,12 +313,12 @@ int main(int argc, char* argv[]){
     char boggleFile[100] = "boggle.txt";
     char dictFile[100] = "mydictionary.txt";
     char resultsFile[100] = "results.txt";
-    
+
     cout.imbue(std::locale("")); //adds commas to large numbers
 
-    if( argc > 1 ) 
+    if( argc > 1 )
         strcpy(boggleFile, argv[1]);
-    if( argc > 2 ) 
+    if( argc > 2 )
         strcpy(dictFile, argv[2]);
 
     buildBoard( boggleFile );
