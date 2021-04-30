@@ -10,6 +10,9 @@ Loads dictionary of 178,590 words from file into a tree in < 1 second.
 Solves 100x100 Boggle (boggle.txt) in 4 seconds. A board that size usually contains ~44,000 words.  
 Solving a 4x4 Boggle is too fast to provide a meaningful benchmark. :)
 
+![Screenshot from 2021-04-30 07-51-10](https://user-images.githubusercontent.com/4087667/116704836-16056c80-a989-11eb-9506-8014e98f8727.png)
+
+
 
 How it Works
 ------------
